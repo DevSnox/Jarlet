@@ -155,10 +155,17 @@ process_hangar_plugin() {
         return 0
     fi
 
-    if [[ -n "$review_state" && "$review_state" != "APPROVED" ]]; then
-        printf 'Skipping "%s" %s: review state is "%s", not approved\n' "$slug" "$target_version" "$review_state"
-        return 0
-    fi
+    # Hangar's reviewState enum (unreviewed/reviewed/under_review/partially_reviewed)
+    # has no "rejected" state -- visibility is what actually gates public
+    # availability, so any known reviewState is fine; skip only on an
+    # unrecognized value.
+    case "$review_state" in
+        "" | unreviewed | reviewed | under_review | partially_reviewed) ;;
+        *)
+            printf 'Skipping "%s" %s: review state is "%s", not a recognized state\n' "$slug" "$target_version" "$review_state"
+            return 0
+            ;;
+    esac
 
     local external_url
     external_url="$(jq -r '.downloads.PAPER.externalUrl // empty' <<<"$version_json")"
