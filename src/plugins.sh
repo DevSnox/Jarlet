@@ -5,52 +5,8 @@ readonly SCRIPT_DIR="$(
     CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd
 )"
 
-readonly SYS_CONFIG_FILE="$SCRIPT_DIR/jarlet-sys.conf"
-
-fail() {
-    printf 'Error: %s\n' "$1" >&2
-    exit 1
-}
-
-config_value() {
-    local key="$1"
-    local file="$2"
-
-    awk -F= -v key="$key" '
-        $0 !~ /^[[:space:]]*#/ && $1 == key {
-            sub(/^[^=]*=/, "")
-            print
-            exit
-        }
-    ' "$file"
-}
-
-sys_config_value() {
-    local key="$1"
-
-    [[ -f "$SYS_CONFIG_FILE" ]] ||
-        fail "$SYS_CONFIG_FILE does not exist"
-
-    local value
-    value="$(config_value "$key" "$SYS_CONFIG_FILE")"
-
-    [[ -n "$value" ]] ||
-        fail "Missing required key '$key' in $SYS_CONFIG_FILE"
-
-    printf '%s' "$value"
-}
-
-servers_root() {
-    if [[ -n "${JARLET_SERVERS_DIR:-}" ]]; then
-        [[ "$JARLET_SERVERS_DIR" = /* ]] ||
-            fail "JARLET_SERVERS_DIR must be an absolute path"
-        printf '%s' "$JARLET_SERVERS_DIR"
-    else
-        local default
-        default="$(sys_config_value SERVERS_DIR_DEFAULT)"
-        printf '%s' "${default/\$HOME/$HOME}"
-    fi
-}
+# shellcheck source=lib.sh
+. "$SCRIPT_DIR/lib.sh"
 
 readonly PROJECT_NAME="$(sys_config_value PROJECT_NAME)"
 readonly REPO_URL="$(sys_config_value REPO_URL)"
@@ -64,12 +20,6 @@ JARLET_VERSION="$("$VERSION_SCRIPT")" ||
 readonly JARLET_VERSION
 
 readonly USER_AGENT="${PROJECT_NAME}/${JARLET_VERSION} (${REPO_URL})"
-
-# Converts a jarlet.toml file to JSON so the rest of this script can use jq
-# throughout, the same way install.sh does for the Paper API's JSON.
-toml_to_json() {
-    dasel --file "$1" --read toml --write json --pretty=false '.'
-}
 
 plugin_state_file() {
     printf '%s/plugins-state.json' "$1"
@@ -133,8 +83,10 @@ main() {
         fail "Server name must be a simple name (letters, digits, ._-)"
 
     command -v jq >/dev/null || fail "jq is required"
-    command -v dasel >/dev/null ||
-        fail "dasel is required to read jarlet.toml (e.g. 'brew install dasel')"
+    require_toml_tools
+
+    local template_name
+    template_name="$(template_filename)"
 
     local root server_dir toml_file
     root="$(servers_root)"
@@ -143,10 +95,10 @@ main() {
     [[ -d "$server_dir" ]] ||
         fail "No server named '$name' found at $server_dir"
 
-    toml_file="$server_dir/jarlet.toml"
+    toml_file="$server_dir/$template_name"
 
     [[ -f "$toml_file" ]] ||
-        fail "$toml_file does not exist. plugins.sh reads the plugin list from a per-server jarlet.toml (see prototyping/documentation/concepts/server-templating); setup.sh does not generate one yet, so place one in the server directory manually for now."
+        fail "$toml_file does not exist. Run setup.sh (or start.sh) for '$name' first to generate it."
 
     local plugins_json
     plugins_json="$(toml_to_json "$toml_file")" ||

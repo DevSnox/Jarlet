@@ -5,52 +5,8 @@ readonly SCRIPT_DIR="$(
     CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd
 )"
 
-readonly SYS_CONFIG_FILE="$SCRIPT_DIR/jarlet-sys.conf"
-
-fail() {
-    printf 'Error: %s\n' "$1" >&2
-    exit 1
-}
-
-config_value() {
-    local key="$1"
-    local file="$2"
-
-    awk -F= -v key="$key" '
-        $0 !~ /^[[:space:]]*#/ && $1 == key {
-            sub(/^[^=]*=/, "")
-            print
-            exit
-        }
-    ' "$file"
-}
-
-sys_config_value() {
-    local key="$1"
-
-    [[ -f "$SYS_CONFIG_FILE" ]] ||
-        fail "$SYS_CONFIG_FILE does not exist"
-
-    local value
-    value="$(config_value "$key" "$SYS_CONFIG_FILE")"
-
-    [[ -n "$value" ]] ||
-        fail "Missing required key '$key' in $SYS_CONFIG_FILE"
-
-    printf '%s' "$value"
-}
-
-servers_root() {
-    if [[ -n "${JARLET_SERVERS_DIR:-}" ]]; then
-        [[ "$JARLET_SERVERS_DIR" = /* ]] ||
-            fail "JARLET_SERVERS_DIR must be an absolute path"
-        printf '%s' "$JARLET_SERVERS_DIR"
-    else
-        local default
-        default="$(sys_config_value SERVERS_DIR_DEFAULT)"
-        printf '%s' "${default/\$HOME/$HOME}"
-    fi
-}
+# shellcheck source=lib.sh
+. "$SCRIPT_DIR/lib.sh"
 
 resolve_path() {
     local path="$1"
@@ -65,12 +21,17 @@ resolve_path() {
 
 main() {
     if (( $# < 1 )); then
-        printf 'Usage: %s <name> [config-file]\n' "$0" >&2
+        printf 'Usage: %s <name> [template-file]\n' "$0" >&2
         exit 2
     fi
 
+    command -v jq >/dev/null || fail "jq is required"
+    require_toml_tools
+
     local name="$1"
-    local config="${2:-jarlet.conf}"
+    local template_name
+    template_name="$(template_filename)"
+    local config="${2:-$template_name}"
 
     [[ "$name" =~ ^[0-9A-Za-z._-]+$ ]] ||
         fail "Server name must be a simple name (letters, digits, ._-)"
@@ -81,7 +42,7 @@ main() {
 
     command -v java >/dev/null || fail "Java is not installed"
 
-    local root server_dir version port online_mode
+    local root server_dir version port online_mode config_json
 
     root="$(servers_root)"
     server_dir="$root/$name"
@@ -89,19 +50,22 @@ main() {
     [[ ! -e "$server_dir" ]] ||
         fail "A server named '$name' already exists at $server_dir"
 
-    version="$(config_value MINECRAFT_VERSION "$config")"
-    port="$(config_value PORT "$config")"
-    online_mode="$(config_value ONLINE_MODE "$config")"
+    config_json="$(toml_to_json "$config")" ||
+        fail "Could not parse $config as TOML"
+
+    version="$(jq -r '.server.minecraft_version // empty' <<<"$config_json")"
+    port="$(jq -r '.server.port // empty' <<<"$config_json")"
+    online_mode="$(jq -r '.server.online_mode // empty' <<<"$config_json")"
 
     [[ "$version" =~ ^[0-9A-Za-z._-]+$ ]] ||
-        fail "Invalid MINECRAFT_VERSION"
+        fail "Invalid [server].minecraft_version"
 
     [[ "$port" =~ ^[0-9]+$ ]] &&
         (( port >= 1 && port <= 65535 )) ||
-        fail "Invalid PORT"
+        fail "Invalid [server].port"
 
     [[ "$online_mode" == "true" || "$online_mode" == "false" ]] ||
-        fail "ONLINE_MODE must be true or false"
+        fail "[server].online_mode must be true or false"
 
     mkdir -p "$server_dir"
 
@@ -122,11 +86,10 @@ main() {
         } >"$server_dir/server.properties"
     fi
 
-    awk -F= -v name="$name" '
-        $0 !~ /^[[:space:]]*#/ && $1 == "NAME" { print "NAME=" name; found=1; next }
-        { print }
-        END { if (!found) print "NAME=" name }
-    ' "$config" >"$server_dir/jarlet.conf"
+    # The instance name lives only in the directory name / CLI arg, never
+    # in the template itself (see server-templating.md), so the per-server
+    # copy is a plain, unmodified copy of the source template.
+    cp "$config" "$server_dir/$template_name"
 
     printf 'Server "%s" is ready at %s\n' "$name" "$server_dir"
     printf 'Run: %s/start.sh %s\n' "$SCRIPT_DIR" "$name"

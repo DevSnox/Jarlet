@@ -1,0 +1,27 @@
+# jarlet.toml — example server template
+#
+# A template describes a reusable server definition: Paper/Minecraft
+# settings plus the plugin set that comes with it. The instance name
+# ("what is this particular server called") is NOT stored here — it is
+# supplied as a CLI argument to setup.sh/start.sh, so the same template
+# can be reused to create multiple differently-named servers.
+#
+# See prototyping/documentation/concepts/server-templating for the full
+# concept and the per-source plugin field meanings (source / id / policy).
+
+[template]
+name = "default"
+description = "Default Jarlet server template"
+
+[server]
+minecraft_version = "1.21.4"
+memory = "2G"
+port = 25565
+online_mode = true
+
+# Declare plugins to fetch via `plugins.sh <name>` (never fetched
+# automatically by setup.sh/start.sh). Example, commented out:
+# [[plugins]]
+# source = "hangar"
+# id = "LuckPerms"
+# policy = { track = "channel", channel = "Release" }

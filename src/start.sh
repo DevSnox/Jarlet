@@ -5,52 +5,8 @@ readonly SCRIPT_DIR="$(
     CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd
 )"
 
-readonly SYS_CONFIG_FILE="$SCRIPT_DIR/jarlet-sys.conf"
-
-fail() {
-    printf 'Error: %s\n' "$1" >&2
-    exit 1
-}
-
-config_value() {
-    local key="$1"
-    local file="$2"
-
-    awk -F= -v key="$key" '
-        $0 !~ /^[[:space:]]*#/ && $1 == key {
-            sub(/^[^=]*=/, "")
-            print
-            exit
-        }
-    ' "$file"
-}
-
-sys_config_value() {
-    local key="$1"
-
-    [[ -f "$SYS_CONFIG_FILE" ]] ||
-        fail "$SYS_CONFIG_FILE does not exist"
-
-    local value
-    value="$(config_value "$key" "$SYS_CONFIG_FILE")"
-
-    [[ -n "$value" ]] ||
-        fail "Missing required key '$key' in $SYS_CONFIG_FILE"
-
-    printf '%s' "$value"
-}
-
-servers_root() {
-    if [[ -n "${JARLET_SERVERS_DIR:-}" ]]; then
-        [[ "$JARLET_SERVERS_DIR" = /* ]] ||
-            fail "JARLET_SERVERS_DIR must be an absolute path"
-        printf '%s' "$JARLET_SERVERS_DIR"
-    else
-        local default
-        default="$(sys_config_value SERVERS_DIR_DEFAULT)"
-        printf '%s' "${default/\$HOME/$HOME}"
-    fi
-}
+# shellcheck source=lib.sh
+. "$SCRIPT_DIR/lib.sh"
 
 main() {
     local foreground=false
@@ -83,38 +39,47 @@ main() {
     done
 
     [[ -n "$name" ]] ||
-        fail "Usage: $0 <name> [config-file] [--foreground] [--accept-eula]"
+        fail "Usage: $0 <name> [template-file] [--foreground] [--accept-eula]"
 
     [[ "$name" =~ ^[0-9A-Za-z._-]+$ ]] ||
         fail "Server name must be a simple name (letters, digits, ._-)"
+
+    command -v jq >/dev/null || fail "jq is required"
+    require_toml_tools
+
+    local template_name
+    template_name="$(template_filename)"
 
     local root server_dir config
 
     root="$(servers_root)"
     server_dir="$root/$name"
-    config="$server_dir/jarlet.conf"
+    config="$server_dir/$template_name"
 
     if [[ ! -f "$config" ]]; then
         [[ -x "$SCRIPT_DIR/setup.sh" ]] ||
             fail "$SCRIPT_DIR/setup.sh is missing or not executable"
 
-        "$SCRIPT_DIR/setup.sh" "$name" "${config_arg:-jarlet.conf}"
+        "$SCRIPT_DIR/setup.sh" "$name" "${config_arg:-$template_name}"
     fi
 
     if ! java -version >/dev/null 2>&1; then
         fail "Java is not installed or not registered"
     fi
 
-    local memory version
+    local memory version config_json
 
-    memory="$(config_value MEMORY "$config")"
-    version="$(config_value MINECRAFT_VERSION "$config")"
+    config_json="$(toml_to_json "$config")" ||
+        fail "Could not parse $config as TOML"
+
+    memory="$(jq -r '.server.memory // empty' <<<"$config_json")"
+    version="$(jq -r '.server.minecraft_version // empty' <<<"$config_json")"
 
     [[ "$memory" =~ ^[1-9][0-9]*[MG]$ ]] ||
-        fail "MEMORY must look like 2G or 2048M"
+        fail "[server].memory must look like 2G or 2048M"
 
     [[ "$version" =~ ^[0-9A-Za-z._-]+$ ]] ||
-        fail "Invalid MINECRAFT_VERSION"
+        fail "Invalid [server].minecraft_version"
 
     if ! grep -q '^eula=true$' "$server_dir/eula.txt" 2>/dev/null; then
         [[ "$accept_eula" == true ]] ||
