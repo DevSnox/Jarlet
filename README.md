@@ -19,16 +19,16 @@ Clone this repo. Go into jarlet.conf and change configurations if needed.
 Standart settings:
 ```conf
 # jarlet.conf
-DIR=first-server
+NAME=
 MINECRAFT_VERSION=26.2
-MEMORY=1G
+MEMORY=2G
 PORT=25565
 ONLINE_MODE=true
 ```
 
 ```bash
 cd src
-./start.sh --accept-eula --foreground
+./start.sh <server-name> --accept-eula --foreground
 ```
 
 # Versioning
