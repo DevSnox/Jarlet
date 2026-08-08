@@ -68,7 +68,7 @@ template_filename() {
 # Converts a jarlet.toml file to JSON so callers can use jq throughout,
 # the same way install.sh does for the Paper API's JSON.
 toml_to_json() {
-    dasel --file "$1" --read toml --write json --pretty=false '.'
+    dasel -i toml -o json --compact --root < "$1"
 }
 
 # Fails with a clear message unless both TOML-parsing tools are available.

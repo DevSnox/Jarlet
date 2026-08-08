@@ -14,14 +14,12 @@ name = "default"
 description = "Default Jarlet server template"
 
 [server]
-minecraft_version = "1.21.4"
+minecraft_version = "26.2"
 memory = "2G"
 port = 25565
 online_mode = true
 
-# Declare plugins to fetch via `plugins.sh <name>` (never fetched
-# automatically by setup.sh/start.sh). Example, commented out:
-# [[plugins]]
-# source = "hangar"
-# id = "LuckPerms"
-# policy = { track = "channel", channel = "Release" }
+[[plugins]]
+source = "hangar"
+id = "Essentials"
+policy = { track = "channel", channel = "Release" }
