@@ -5,6 +5,8 @@ readonly SCRIPT_DIR="$(
     CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd
 )"
 
+readonly SYS_CONFIG_FILE="$SCRIPT_DIR/jarlet-sys.conf"
+
 fail() {
     printf 'Error: %s\n' "$1" >&2
     exit 1
@@ -23,20 +25,52 @@ config_value() {
     ' "$file"
 }
 
+sys_config_value() {
+    local key="$1"
+
+    [[ -f "$SYS_CONFIG_FILE" ]] ||
+        fail "$SYS_CONFIG_FILE does not exist"
+
+    local value
+    value="$(config_value "$key" "$SYS_CONFIG_FILE")"
+
+    [[ -n "$value" ]] ||
+        fail "Missing required key '$key' in $SYS_CONFIG_FILE"
+
+    printf '%s' "$value"
+}
+
+servers_root() {
+    if [[ -n "${JARLET_SERVERS_DIR:-}" ]]; then
+        [[ "$JARLET_SERVERS_DIR" = /* ]] ||
+            fail "JARLET_SERVERS_DIR must be an absolute path"
+        printf '%s' "$JARLET_SERVERS_DIR"
+    else
+        local default
+        default="$(sys_config_value SERVERS_DIR_DEFAULT)"
+        printf '%s' "${default/\$HOME/$HOME}"
+    fi
+}
+
 main() {
-    local config="$SCRIPT_DIR/jarlet.conf"
+    if (( $# < 1 )); then
+        printf 'Usage: %s <name>\n' "$0" >&2
+        exit 2
+    fi
 
-    [[ -f "$config" ]] ||
-        fail "$config does not exist"
+    local name="$1"
 
-    local dir server_dir pid_file server_pid command
+    [[ "$name" =~ ^[0-9A-Za-z._-]+$ ]] ||
+        fail "Server name must be a simple name (letters, digits, ._-)"
 
-    dir="$(config_value DIR "$config")"
+    local root server_dir pid_file server_pid command
 
-    [[ "$dir" =~ ^[0-9A-Za-z._-]+$ ]] ||
-        fail "DIR must be a simple relative directory name"
+    root="$(servers_root)"
+    server_dir="$root/$name"
 
-    server_dir="$SCRIPT_DIR/$dir"
+    [[ -d "$server_dir" ]] ||
+        fail "No server named '$name' found at $server_dir"
+
     pid_file="$server_dir/.jarlet/server.pid"
 
     [[ -f "$pid_file" ]] ||
@@ -62,12 +96,18 @@ main() {
             ;;
     esac
 
-    printf 'Stopping server...\n'
+    printf 'Stopping server "%s"...\n' "$name"
     kill -TERM "$server_pid"
+
+    local stop_timeout
+    stop_timeout="$(sys_config_value STOP_TIMEOUT_SECONDS)"
+
+    [[ "$stop_timeout" =~ ^[1-9][0-9]*$ ]] ||
+        fail "STOP_TIMEOUT_SECONDS must be a positive integer"
 
     local attempt
 
-    for attempt in {1..60}; do
+    for (( attempt = 1; attempt <= stop_timeout; attempt++ )); do
         if ! kill -0 "$server_pid" 2>/dev/null; then
             rm -f "$pid_file"
             printf 'Server stopped\n'
@@ -77,7 +117,7 @@ main() {
         sleep 1
     done
 
-    fail "Server did not stop within 60 seconds; inspect logs/latest.log"
+    fail "Server did not stop within $stop_timeout seconds; inspect logs/latest.log"
 }
 
 main "$@"

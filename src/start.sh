@@ -5,6 +5,8 @@ readonly SCRIPT_DIR="$(
     CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd
 )"
 
+readonly SYS_CONFIG_FILE="$SCRIPT_DIR/jarlet-sys.conf"
+
 fail() {
     printf 'Error: %s\n' "$1" >&2
     exit 1
@@ -23,9 +25,38 @@ config_value() {
     ' "$file"
 }
 
+sys_config_value() {
+    local key="$1"
+
+    [[ -f "$SYS_CONFIG_FILE" ]] ||
+        fail "$SYS_CONFIG_FILE does not exist"
+
+    local value
+    value="$(config_value "$key" "$SYS_CONFIG_FILE")"
+
+    [[ -n "$value" ]] ||
+        fail "Missing required key '$key' in $SYS_CONFIG_FILE"
+
+    printf '%s' "$value"
+}
+
+servers_root() {
+    if [[ -n "${JARLET_SERVERS_DIR:-}" ]]; then
+        [[ "$JARLET_SERVERS_DIR" = /* ]] ||
+            fail "JARLET_SERVERS_DIR must be an absolute path"
+        printf '%s' "$JARLET_SERVERS_DIR"
+    else
+        local default
+        default="$(sys_config_value SERVERS_DIR_DEFAULT)"
+        printf '%s' "${default/\$HOME/$HOME}"
+    fi
+}
+
 main() {
     local foreground=false
     local accept_eula=false
+    local name=""
+    local config_arg=""
     local argument
 
     for argument in "$@"; do
@@ -36,29 +67,48 @@ main() {
             --accept-eula)
                 accept_eula=true
                 ;;
-            *)
+            -*)
                 fail "Unknown argument: $argument"
+                ;;
+            *)
+                if [[ -z "$name" ]]; then
+                    name="$argument"
+                elif [[ -z "$config_arg" ]]; then
+                    config_arg="$argument"
+                else
+                    fail "Unexpected argument: $argument"
+                fi
                 ;;
         esac
     done
 
-    local config="$SCRIPT_DIR/jarlet.conf"
+    [[ -n "$name" ]] ||
+        fail "Usage: $0 <name> [config-file] [--foreground] [--accept-eula]"
 
-    [[ -f "$config" ]] ||
-        fail "$config does not exist"
+    [[ "$name" =~ ^[0-9A-Za-z._-]+$ ]] ||
+        fail "Server name must be a simple name (letters, digits, ._-)"
+
+    local root server_dir config
+
+    root="$(servers_root)"
+    server_dir="$root/$name"
+    config="$server_dir/jarlet.conf"
+
+    if [[ ! -f "$config" ]]; then
+        [[ -x "$SCRIPT_DIR/setup.sh" ]] ||
+            fail "$SCRIPT_DIR/setup.sh is missing or not executable"
+
+        "$SCRIPT_DIR/setup.sh" "$name" "${config_arg:-jarlet.conf}"
+    fi
 
     if ! java -version >/dev/null 2>&1; then
         fail "Java is not installed or not registered"
     fi
 
-    local dir memory version server_dir
+    local memory version
 
-    dir="$(config_value DIR "$config")"
     memory="$(config_value MEMORY "$config")"
     version="$(config_value MINECRAFT_VERSION "$config")"
-
-    [[ "$dir" =~ ^[0-9A-Za-z._-]+$ ]] ||
-        fail "DIR must be a simple relative directory name"
 
     [[ "$memory" =~ ^[1-9][0-9]*[MG]$ ]] ||
         fail "MEMORY must look like 2G or 2048M"
@@ -66,11 +116,9 @@ main() {
     [[ "$version" =~ ^[0-9A-Za-z._-]+$ ]] ||
         fail "Invalid MINECRAFT_VERSION"
 
-    server_dir="$SCRIPT_DIR/$dir"
-
     if ! grep -q '^eula=true$' "$server_dir/eula.txt" 2>/dev/null; then
         [[ "$accept_eula" == true ]] ||
-            fail "Run ./start.sh --accept-eula after reading https://aka.ms/MinecraftEULA"
+            fail "Run $0 $name --accept-eula after reading https://aka.ms/MinecraftEULA"
 
         mkdir -p "$server_dir"
         printf 'eula=true\n' >"$server_dir/eula.txt"
@@ -133,7 +181,13 @@ main() {
     local server_pid="$!"
     printf '%s\n' "$server_pid" >"$pid_file"
 
-    sleep 2
+    local startup_check_delay
+    startup_check_delay="$(sys_config_value STARTUP_CHECK_DELAY_SECONDS)"
+
+    [[ "$startup_check_delay" =~ ^[0-9]+$ ]] ||
+        fail "STARTUP_CHECK_DELAY_SECONDS must be a non-negative integer"
+
+    sleep "$startup_check_delay"
 
     if ! kill -0 "$server_pid" 2>/dev/null; then
         rm -f "$pid_file"
@@ -145,7 +199,7 @@ main() {
         fail "Paper stopped during startup"
     fi
 
-    printf 'Server started with PID %s\n' "$server_pid"
+    printf 'Server "%s" started with PID %s\n' "$name" "$server_pid"
     printf 'Logs: %s/logs/latest.log\n' "$server_dir"
 }
 

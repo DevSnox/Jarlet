@@ -5,17 +5,49 @@ readonly SCRIPT_DIR="$(
     CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd
 )"
 
-readonly JARLET_VERSION="$(
-    bash "$SCRIPT_DIR/version.sh"
-)"
-
-readonly PAPER_API="https://fill.papermc.io/v3"
-readonly USER_AGENT="Jarlet/$JARLET_VERSION (https://github.com/DevSnox/jarlet)"
+readonly SYS_CONFIG_FILE="$SCRIPT_DIR/jarlet-sys.conf"
 
 fail() {
     printf 'Error: %s\n' "$1" >&2
     exit 1
 }
+
+sys_config_value() {
+    local key="$1"
+
+    [[ -f "$SYS_CONFIG_FILE" ]] ||
+        fail "$SYS_CONFIG_FILE does not exist"
+
+    local value
+    value="$(
+        awk -F= -v key="$key" '
+            $0 !~ /^[[:space:]]*#/ && $1 == key {
+                sub(/^[^=]*=/, "")
+                print
+                exit
+            }
+        ' "$SYS_CONFIG_FILE"
+    )"
+
+    [[ -n "$value" ]] ||
+        fail "Missing required key '$key' in $SYS_CONFIG_FILE"
+
+    printf '%s' "$value"
+}
+
+readonly PAPER_API="$(sys_config_value PAPER_API)"
+readonly PROJECT_NAME="$(sys_config_value PROJECT_NAME)"
+readonly REPO_URL="$(sys_config_value REPO_URL)"
+
+readonly VERSION_SCRIPT="$SCRIPT_DIR/version.sh"
+[[ -x "$VERSION_SCRIPT" ]] ||
+    fail "$VERSION_SCRIPT does not exist or is not executable"
+
+JARLET_VERSION="$("$VERSION_SCRIPT")" ||
+    fail "Could not determine jarlet version"
+readonly JARLET_VERSION
+
+readonly USER_AGENT="${PROJECT_NAME}/${JARLET_VERSION} (${REPO_URL})"
 
 download_paper() {
     local minecraft_version="$1"
