@@ -18,12 +18,15 @@
 #     prereleases/drafts).
 #   - A release's assets array has no "this is the plugin jar" field, so
 #     asset selection is a deterministic filter (content-type + name-
-#     pattern exclusion, see github_releases_pick_asset() below); if more
-#     than one candidate survives (or zero), this adapter skips with a
-#     message rather than guessing or prompting interactively -- there is
-#     no mechanism in this codebase yet to persist a resolved asset choice
-#     back into jarlet.toml, so a one-time interactive disambiguation
-#     would have nowhere durable to be remembered.
+#     pattern exclusion, see github_releases_pick_asset() below). If more
+#     than one candidate survives -- e.g. a core plugin plus optional addon
+#     jars in the same release, as with EssentialsX's 2.22.0 release -- the
+#     candidate with the highest value of the configured tie-break field
+#     (GITHUB_ASSET_TIEBREAK_FIELD in jarlet-sys.conf, default
+#     "download_count") is picked automatically, on the assumption that the
+#     most-downloaded jar is the main/core artifact; no prompting, no
+#     persisted choice. This adapter only skips with a message when zero
+#     candidates survive the filter at all.
 #   - GitHub's per-asset `digest` (sha256:...) is verified when present;
 #     falls back to size-only verification (with a printed warning) when
 #     absent, same "best available verification" precedent as hangar.sh.
@@ -32,6 +35,7 @@ command -v curl >/dev/null || fail "curl is required for the github-releases sou
 command -v shasum >/dev/null || fail "shasum is required for the github-releases source"
 
 readonly GITHUB_API="$(sys_config_value GITHUB_API)"
+readonly GITHUB_ASSET_TIEBREAK_FIELD="$(sys_config_value GITHUB_ASSET_TIEBREAK_FIELD)"
 
 # GET against $GITHUB_API$path, returning the response body. Sends an
 # Authorization header only if JARLET_GITHUB_TOKEN is set in the
@@ -76,12 +80,23 @@ github_releases_get() {
 # Given a release's assets array (as JSON), applies the deterministic
 # jar-selection filter: prefer plugin-jar-shaped content types, exclude
 # known non-plugin name patterns (sources/javadoc jars, checksum/signature
-# files, changelogs/text files). Prints the single surviving asset object
-# as JSON if exactly one remains; prints nothing (and returns 1) otherwise
-# so the caller can distinguish "zero matches" / "ambiguous" from "found".
+# files, changelogs/text files). If exactly one candidate survives, prints
+# it as JSON. If more than one survives (e.g. a core plugin plus optional
+# addon jars in the same release, as with EssentialsX), picks the one with
+# the highest value of the GITHUB_ASSET_TIEBREAK_FIELD asset field
+# (jarlet-sys.conf, default "download_count" -- GitHub's per-asset
+# popularity counter) as a deterministic tie-break, on the assumption that
+# the most-downloaded jar is the main/core artifact. Prints nothing and
+# returns 1 only when zero candidates survive the filter -- the sole case
+# still treated as "no usable asset found". Also sets
+# GITHUB_ASSET_CANDIDATE_COUNT to the number of candidates that survived
+# the filter (before the tie-break), so the caller can tell a clean single
+# match apart from a resolved tie without re-running the filter itself.
 github_releases_pick_asset() {
     local assets_json="$1"
     local candidates count
+
+    GITHUB_ASSET_CANDIDATE_COUNT=0
 
     candidates="$(
         jq -c '
@@ -106,13 +121,14 @@ github_releases_pick_asset() {
     )"
 
     count="$(jq 'length' <<<"$candidates")"
+    GITHUB_ASSET_CANDIDATE_COUNT="$count"
 
-    if [[ "$count" == "1" ]]; then
-        jq -c '.[0]' <<<"$candidates"
-        return 0
+    if [[ "$count" == "0" ]]; then
+        return 1
     fi
 
-    return 1
+    jq -c --arg field "$GITHUB_ASSET_TIEBREAK_FIELD" 'max_by(.[$field])' <<<"$candidates"
+    return 0
 }
 
 # Recognizes GitHub repo/release URLs -- the ADAPTER_URL_MATCHER this
@@ -229,11 +245,17 @@ process_github_releases_plugin() {
     assets_json="$(jq -c '.assets // []' <<<"$release_json")"
 
     if ! asset_json="$(github_releases_pick_asset "$assets_json")"; then
-        local candidate_count
-        candidate_count="$(jq 'length' <<<"$assets_json")"
-        printf 'Skipping "%s" %s: could not determine a single plugin jar among %s release asset(s); install manually\n' \
-            "$id" "$tag_name" "$candidate_count"
+        printf 'Skipping "%s" %s: no asset in this release looks like a plugin jar; install manually\n' \
+            "$id" "$tag_name"
         return 0
+    fi
+
+    if [[ "$GITHUB_ASSET_CANDIDATE_COUNT" -gt 1 ]]; then
+        local picked_name picked_tiebreak_value
+        picked_name="$(jq -r '.name' <<<"$asset_json")"
+        picked_tiebreak_value="$(jq -r --arg field "$GITHUB_ASSET_TIEBREAK_FIELD" '.[$field]' <<<"$asset_json")"
+        printf 'Multiple candidate assets found for "%s" %s; using "%s" (highest %s: %s)\n' \
+            "$id" "$tag_name" "$picked_name" "$GITHUB_ASSET_TIEBREAK_FIELD" "$picked_tiebreak_value"
     fi
 
     local asset_name asset_size asset_url asset_digest expected_hash
