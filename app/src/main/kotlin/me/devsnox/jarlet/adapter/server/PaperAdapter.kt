@@ -195,7 +195,6 @@ object PaperAdapter : ServerSoftwareAdapter {
 
     @Serializable
     private data class PaperProjectResponse(
-        val project: String? = null,
         val versions: Map<String, List<String>> = emptyMap(),
     )
 
