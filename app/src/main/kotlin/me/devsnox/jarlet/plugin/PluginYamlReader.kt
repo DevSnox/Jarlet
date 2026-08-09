@@ -100,6 +100,20 @@ object PluginYamlReader {
             // rather than YamlEngineException -- treat any of those as
             // "unparseable" too, same as a missing/corrupt entry.
             return null
+        } catch (e: LinkageError) {
+            // Belt-and-suspenders alongside the loadFromString switch above:
+            // an Error (e.g. ExceptionInInitializerError/NoClassDefFoundError
+            // from a class the engine touches failing to initialize, as
+            // YamlUnicodeReader's UTF-32BE registration once did under
+            // GraalVM native-image) is not a subtype of Exception, so it
+            // would otherwise sail past the catches above and break this
+            // function's documented "never throws" contract. Caught
+            // narrowly as LinkageError rather than Throwable: that's the
+            // real Java hierarchy for "class failed to load/link", and
+            // stays clear of masking unrelated fatal errors (e.g.
+            // OutOfMemoryError) that callers should NOT see silently
+            // swallowed into a null.
+            return null
         }
 
         val map = parsed as? Map<*, *> ?: return null
