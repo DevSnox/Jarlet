@@ -14,6 +14,7 @@ name = "default"
 description = "Default Jarlet server template"
 
 [server]
+package = "paper"
 minecraft_version = "26.2"
 memory = "2G"
 port = 25565

@@ -5,8 +5,8 @@ readonly SCRIPT_DIR="$(
     CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd
 )"
 
-# shellcheck source=lib.sh
-. "$SCRIPT_DIR/lib.sh"
+# shellcheck source=../lib/lib.sh
+. "$SCRIPT_DIR/../lib/lib.sh"
 
 main() {
     local foreground=false
@@ -67,19 +67,23 @@ main() {
         fail "Java is not installed or not registered"
     fi
 
-    local memory version config_json
+    local memory version package config_json
 
     config_json="$(toml_to_json "$config")" ||
         fail "Could not parse $config as TOML"
 
     memory="$(jq -r '.server.memory // empty' <<<"$config_json")"
     version="$(jq -r '.server.minecraft_version // empty' <<<"$config_json")"
+    package="$(jq -r '.server.package // "paper"' <<<"$config_json")"
 
     [[ "$memory" =~ ^[1-9][0-9]*[MG]$ ]] ||
         fail "[server].memory must look like 2G or 2048M"
 
     [[ "$version" =~ ^[0-9A-Za-z._-]+$ ]] ||
         fail "Invalid [server].minecraft_version"
+
+    [[ "$package" == "paper" ]] ||
+        fail "Unknown [server].package '$package'; only 'paper' is implemented"
 
     if ! grep -q '^eula=true$' "$server_dir/eula.txt" 2>/dev/null; then
         [[ "$accept_eula" == true ]] ||
@@ -95,7 +99,8 @@ main() {
 
         "$SCRIPT_DIR/install.sh" \
             "$version" \
-            "$server_dir/server.jar"
+            "$server_dir/server.jar" \
+            "$package"
     fi
 
     cd "$server_dir"

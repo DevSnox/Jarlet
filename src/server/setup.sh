@@ -5,8 +5,8 @@ readonly SCRIPT_DIR="$(
     CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd
 )"
 
-# shellcheck source=lib.sh
-. "$SCRIPT_DIR/lib.sh"
+# shellcheck source=../lib/lib.sh
+. "$SCRIPT_DIR/../lib/lib.sh"
 
 resolve_path() {
     local path="$1"
@@ -42,7 +42,7 @@ main() {
 
     command -v java >/dev/null || fail "Java is not installed"
 
-    local root server_dir version port online_mode config_json
+    local root server_dir version port online_mode package config_json
 
     root="$(servers_root)"
     server_dir="$root/$name"
@@ -56,6 +56,7 @@ main() {
     version="$(jq -r '.server.minecraft_version // empty' <<<"$config_json")"
     port="$(jq -r '.server.port // empty' <<<"$config_json")"
     online_mode="$(jq -r '.server.online_mode // empty' <<<"$config_json")"
+    package="$(jq -r '.server.package // "paper"' <<<"$config_json")"
 
     [[ "$version" =~ ^[0-9A-Za-z._-]+$ ]] ||
         fail "Invalid [server].minecraft_version"
@@ -67,10 +68,13 @@ main() {
     [[ "$online_mode" == "true" || "$online_mode" == "false" ]] ||
         fail "[server].online_mode must be true or false"
 
+    [[ "$package" == "paper" ]] ||
+        fail "Unknown [server].package '$package'; only 'paper' is implemented"
+
     mkdir -p "$server_dir"
 
     if [[ ! -f "$server_dir/server.jar" ]]; then
-        "$SCRIPT_DIR/install.sh" "$version" "$server_dir/server.jar"
+        "$SCRIPT_DIR/install.sh" "$version" "$server_dir/server.jar" "$package"
     fi
 
     if [[ ! -f "$server_dir/eula.txt" ]]; then
