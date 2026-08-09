@@ -26,6 +26,7 @@ graalvmNative {
             imageName.set("jarlet")
             mainClass.set("me.devsnox.jarlet.MainKt")
             buildArgs.add("--no-fallback")
+            buildArgs.add("-H:+BuildReport") // TEMP: baseline measurement, will revert after
             javaLauncher.set(
                 javaToolchains.launcherFor {
                     languageVersion.set(JavaLanguageVersion.of(25))
