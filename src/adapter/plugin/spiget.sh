@@ -359,3 +359,7 @@ process_spiget_plugin() {
 # Self-description read back by router.sh -- see the contract note above.
 ADAPTER_SOURCE_NAME=spiget
 ADAPTER_ENTRY_FUNCTION=process_spiget_plugin
+# Cosmetic only -- see router.sh's header and list.sh's cmd_list() for the
+# optional-field mechanism this plugs into. Printed by `list` in place of
+# the raw internal source string.
+ADAPTER_DISPLAY_NAME="SpigotMC"

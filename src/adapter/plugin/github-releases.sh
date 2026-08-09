@@ -356,3 +356,7 @@ ADAPTER_ENTRY_FUNCTION=process_github_releases_plugin
 # Optional -- see router.sh's header and redirect.sh -- lets another
 # source's external-hosting gate recognize a URL as pointing here.
 ADAPTER_URL_MATCHER=github_releases_match_url
+# Cosmetic only -- see router.sh's header and list.sh's cmd_list() for the
+# optional-field mechanism this plugs into. Printed by `list` in place of
+# the raw internal source string.
+ADAPTER_DISPLAY_NAME="Github"

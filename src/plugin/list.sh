@@ -7,7 +7,9 @@
 # per-plugin view, then renders it as a simple, flag-driven static page
 # (no interactive/curses-style paging -- this is a prototype). May assume
 # plugin.sh has already defined: fail(), sys_config_value(), and that
-# store.sh has already been sourced (read_all_installed()).
+# store.sh and router.sh have already been sourced (read_all_installed(),
+# adapter_display_name() -- the latter used purely for cosmetic output
+# below, see its doc comment in router.sh).
 
 # `plugins.sh <name> list [--page <n>] [--all]`
 #
@@ -91,7 +93,7 @@ cmd_list() {
         (( end <= count )) || end=$count
     fi
 
-    local i entry id source version_name pin channel version_display policy_display
+    local i entry id source source_display version_name pin channel version_display policy_display
     for (( i = start; i < end; i++ )); do
         entry="$(jq -c ".[$i]" <<<"$merged_json")"
         id="$(jq -r '.id' <<<"$entry")"
@@ -99,6 +101,11 @@ cmd_list() {
         version_name="$(jq -r '.version_name // empty' <<<"$entry")"
         pin="$(jq -r '.policy.pin // empty' <<<"$entry")"
         channel="$(jq -r '.policy.channel // empty' <<<"$entry")"
+
+        # Cosmetic only -- see router.sh's adapter_display_name() doc
+        # comment. `source` itself (used for lookups/sorting above) is
+        # never affected by this; only what gets printed here is.
+        source_display="$(adapter_display_name "$source")"
 
         version_display="${version_name:-not installed}"
         if [[ -n "$pin" ]]; then
@@ -109,7 +116,7 @@ cmd_list() {
             policy_display="-"
         fi
 
-        printf '  %s (%s) -- %s [%s]\n' "$id" "$source" "$version_display" "$policy_display"
+        printf '  %s (%s) -- %s [%s]\n' "$id" "$source_display" "$version_display" "$policy_display"
     done
 
     if (( ! show_all )); then

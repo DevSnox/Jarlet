@@ -28,6 +28,13 @@
 # URL might plausibly point at needs to set one. See redirect.sh's header for
 # the full mechanism this enables and ../adapter/plugin/github-releases.sh's
 # github_releases_match_url() for the one adapter that sets it today.
+#
+# ADAPTER_DISPLAY_NAME is likewise optional -- a purely cosmetic, human-
+# readable name (e.g. "SpigotMC") an adapter may set for list.sh's cmd_list()
+# to print instead of the raw internal source string. It carries zero
+# routing/storage meaning: the internal source name (filename, jarlet.toml's
+# `source` field, plugins-state.json's `source` field) is completely
+# unaffected by it and is never derived from it.
 
 # Maps a loaded source name to its adapter's entry-point function, so a
 # source is sourced (and its own deps checked) lazily and only once per
@@ -53,6 +60,14 @@ adapter_url_matcher_var() {
     printf 'ADAPTER_URL_MATCHER_%s' "${1//-/_}"
 }
 
+# Companion to adapter_loaded_var(), same bash-3.2-compatible mechanism:
+# holds the optional ADAPTER_DISPLAY_NAME a loaded adapter may have set (see
+# load_adapter() below), namespaced per source for the same reason
+# adapter_url_matcher_var() is.
+adapter_display_name_var() {
+    printf 'ADAPTER_DISPLAY_NAME_%s' "${1//-/_}"
+}
+
 # Idempotently loads (sources) the adapter file for `source`, if one exists.
 # Extracted out of route_plugin() so redirect.sh's try_resolve_external_url()
 # can also load adapters (to inspect their optional ADAPTER_URL_MATCHER)
@@ -62,9 +77,10 @@ adapter_url_matcher_var() {
 # report that -- route_plugin()'s missing-adapter message differs from
 # try_resolve_external_url()'s silent "not a match, try the next one".
 #
-# On success, adapter_loaded_var("$source") holds ADAPTER_ENTRY_FUNCTION, and
-# -- only if the adapter set one -- adapter_url_matcher_var("$source") holds
-# ADAPTER_URL_MATCHER.
+# On success, adapter_loaded_var("$source") holds ADAPTER_ENTRY_FUNCTION,
+# and -- only if the adapter set one -- adapter_url_matcher_var("$source")
+# holds ADAPTER_URL_MATCHER and adapter_display_name_var("$source") holds
+# ADAPTER_DISPLAY_NAME.
 load_adapter() {
     local source="$1"
     local adapter_file="$SCRIPT_DIR/../adapter/plugin/$source.sh"
@@ -75,7 +91,7 @@ load_adapter() {
     loaded_var="$(adapter_loaded_var "$source")"
 
     if [[ -z "${!loaded_var:-}" ]]; then
-        local ADAPTER_SOURCE_NAME="" ADAPTER_ENTRY_FUNCTION="" ADAPTER_URL_MATCHER=""
+        local ADAPTER_SOURCE_NAME="" ADAPTER_ENTRY_FUNCTION="" ADAPTER_URL_MATCHER="" ADAPTER_DISPLAY_NAME=""
         # shellcheck source=/dev/null
         . "$adapter_file"
 
@@ -88,6 +104,10 @@ load_adapter() {
         declare -F "$ADAPTER_ENTRY_FUNCTION" >/dev/null ||
             fail "Adapter '$adapter_file' declares ADAPTER_ENTRY_FUNCTION='$ADAPTER_ENTRY_FUNCTION' but that function is not defined"
 
+        if [[ -n "$ADAPTER_DISPLAY_NAME" ]]; then
+            printf -v "$(adapter_display_name_var "$source")" '%s' "$ADAPTER_DISPLAY_NAME"
+        fi
+
         if [[ -n "$ADAPTER_URL_MATCHER" ]]; then
             declare -F "$ADAPTER_URL_MATCHER" >/dev/null ||
                 fail "Adapter '$adapter_file' declares ADAPTER_URL_MATCHER='$ADAPTER_URL_MATCHER' but that function is not defined"
@@ -99,6 +119,31 @@ load_adapter() {
     fi
 
     return 0
+}
+
+# Cosmetic-only accessor used by list.sh's cmd_list() to print a
+# human-readable name instead of the raw internal source string. Loads the
+# adapter (if not already loaded) purely to read its self-declared
+# ADAPTER_DISPLAY_NAME -- load_adapter() only sources the adapter file and
+# checks its own local dependencies, it never touches the network, so this
+# is safe to call for every declared entry `list` renders. Falls back to
+# the raw `source` string itself -- defensively, matching how
+# ADAPTER_URL_MATCHER is optional today -- if the adapter set no display
+# name, or if no adapter file exists for `source` at all (e.g. a stale/
+# hand-edited jarlet.toml entry).
+adapter_display_name() {
+    local source="$1"
+
+    load_adapter "$source" || { printf '%s' "$source"; return 0; }
+
+    local display_var
+    display_var="$(adapter_display_name_var "$source")"
+
+    if [[ -n "${!display_var:-}" ]]; then
+        printf '%s' "${!display_var}"
+    else
+        printf '%s' "$source"
+    fi
 }
 
 # Routes a single declared entry (source/id/policy_json) to its source
