@@ -53,36 +53,49 @@ internal object ServerSetup {
         // filesystem, matching setup.sh's ordering.
         val adapter = ServerSoftwareAdapters.find(server.pkg)
 
-        Files.createDirectories(serverDir)
+        try {
+            Files.createDirectories(serverDir)
 
-        val serverJar = serverDir.resolve("server.jar")
-        if (!Files.isRegularFile(serverJar)) {
-            adapter.install(server.minecraftVersion, serverJar)
+            val serverJar = serverDir.resolve("server.jar")
+            if (!Files.isRegularFile(serverJar)) {
+                adapter.install(server.minecraftVersion, serverJar)
+            }
+
+            val eulaFile = serverDir.resolve("eula.txt")
+            if (!Files.isRegularFile(eulaFile)) {
+                Files.writeString(eulaFile, "eula=true\n")
+            }
+
+            val propertiesFile = serverDir.resolve("server.properties")
+            if (!Files.isRegularFile(propertiesFile)) {
+                Files.writeString(
+                    propertiesFile,
+                    "server-port=${server.port}\n" +
+                        "online-mode=${server.onlineMode}\n" +
+                        "motd=A Jarlet Minecraft Server\n" +
+                        "enable-command-block=false\n",
+                )
+            }
+
+            // The instance name lives only in the directory name / CLI arg,
+            // never in the template itself (server-templating.md), so the
+            // per-server copy is a plain, unmodified (byte-for-byte) copy of
+            // the source template -- not a re-serialize through [JarletToml],
+            // which would drop comments/formatting the same way
+            // `json_to_toml()` does in the bash version.
+            Files.copy(configPath, serverDir.resolve(templateName))
+        } catch (exception: Exception) {
+            // Roll back: everything under serverDir was created by THIS call
+            // (the Files.exists(serverDir) guard above means we only ever
+            // reach here when the directory didn't exist beforehand), so a
+            // failure at any point -- e.g. adapter.install() throwing because
+            // the requested Minecraft version isn't supported -- must not
+            // leave a half-built directory behind. Otherwise a retry with the
+            // same name trips the "already exists" guard forever, even
+            // though setup never actually completed.
+            serverDir.toFile().deleteRecursively()
+            throw exception
         }
-
-        val eulaFile = serverDir.resolve("eula.txt")
-        if (!Files.isRegularFile(eulaFile)) {
-            Files.writeString(eulaFile, "eula=true\n")
-        }
-
-        val propertiesFile = serverDir.resolve("server.properties")
-        if (!Files.isRegularFile(propertiesFile)) {
-            Files.writeString(
-                propertiesFile,
-                "server-port=${server.port}\n" +
-                    "online-mode=${server.onlineMode}\n" +
-                    "motd=A Jarlet Minecraft Server\n" +
-                    "enable-command-block=false\n",
-            )
-        }
-
-        // The instance name lives only in the directory name / CLI arg,
-        // never in the template itself (server-templating.md), so the
-        // per-server copy is a plain, unmodified (byte-for-byte) copy of
-        // the source template -- not a re-serialize through [JarletToml],
-        // which would drop comments/formatting the same way
-        // `json_to_toml()` does in the bash version.
-        Files.copy(configPath, serverDir.resolve(templateName))
 
         return Result(serverDir, toml)
     }
