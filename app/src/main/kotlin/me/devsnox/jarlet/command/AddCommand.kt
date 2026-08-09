@@ -14,12 +14,12 @@ import me.devsnox.jarlet.command.lib.ServerCommandException
 import me.devsnox.jarlet.command.lib.serverCommandBody
 
 /**
- * `jarlet plugin add <name> <identifier> [--pin <version> | --channel <name>] [--source <hangar|spiget|github-releases>] [--trust]`
+ * `jarlet plugin add <name> <identifier> [--pin <version> | --channel <name>] [--source <hangar|spiget|github>] [--trust]`
  * -- Kotlin port of `src/plugin/commands.sh`'s `cmd_add()`.
  *
  * `source` is no longer a positional argument -- per the alpha.5 redesign
  * `commands.sh` documents, it's inferred from `identifier` by
- * [SourceResolver.resolveAddIdentifier] (`owner/repo` -> github-releases,
+ * [SourceResolver.resolveAddIdentifier] (`owner/repo` -> github,
  * numeric -> probe hangar/spiget, name -> hangar exact slug then spiget
  * exact-name search), unless `--source` is given as an explicit escape
  * hatch that skips inference entirely (still validated via
@@ -34,7 +34,7 @@ import me.devsnox.jarlet.command.lib.serverCommandBody
  *
  * Fully wired end-to-end: [SourceResolver], [JarletToml] (tomlj-backed
  * read/mutate/write), and [PluginRouter.route] against [AdapterRegistry]'s
- * three registered adapters (hangar, github-releases, spiget).
+ * three registered adapters (hangar, github, spiget).
  */
 class AddCommand : CliktCommand(name = "add") {
 
@@ -50,7 +50,7 @@ class AddCommand : CliktCommand(name = "add") {
     private val channel by option("--channel", help = "Track this release channel (default: Release).")
     private val sourceOverride by option(
         "--source",
-        help = "Skip source inference; must be one of hangar, spiget, github-releases.",
+        help = "Skip source inference; must be one of hangar, spiget, github.",
     )
     private val trust by option("--trust", help = "Proceed past an external-hosting gate this adapter can't otherwise resolve.")
         .flag(default = false)

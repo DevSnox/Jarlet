@@ -23,7 +23,7 @@ import me.devsnox.jarlet.config.JarletToml
  * identifier, and the actual fetch/install once a plugin is resolved --
  * covered instead by the adapter smoke tests under `integrationTest`
  * (`HangarAdapterIntegrationTest`, `SpigetAdapterIntegrationTest`,
- * `GithubReleasesAdapterIntegrationTest`).
+ * `GithubAdapterIntegrationTest`).
  */
 class AddCommandTest : CommandTestSupport() {
 
@@ -82,14 +82,14 @@ class AddCommandTest : CommandTestSupport() {
     }
 
     @Test
-    fun `a --source github-releases id that is not owner slash repo is rejected before touching the network`() {
+    fun `a --source github id that is not owner slash repo is rejected before touching the network`() {
         writeServerToml("myserver")
 
-        val result = Jarlet().test(listOf("plugin", "add", "myserver", "not-owner-repo", "--source", "github-releases"))
+        val result = Jarlet().test(listOf("plugin", "add", "myserver", "not-owner-repo", "--source", "github"))
 
         assertEquals(1, result.statusCode)
         assertTrue(
-            result.stderr.contains("--source github-releases requires an 'owner/repo' id"),
+            result.stderr.contains("--source github requires an 'owner/repo' id"),
             "got: ${result.stderr}",
         )
     }

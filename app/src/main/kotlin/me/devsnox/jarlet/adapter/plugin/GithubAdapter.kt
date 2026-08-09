@@ -22,7 +22,7 @@ import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 
 /** Thrown for the same failure cases `fail()` covers throughout `src/adapter/plugin/github-releases.sh`. */
-class GithubReleasesAdapterException(message: String) : Exception(message)
+class GithubAdapterException(message: String) : Exception(message)
 
 /**
  * GitHub Releases plugin source adapter -- Kotlin port of
@@ -57,8 +57,8 @@ class GithubReleasesAdapterException(message: String) : Exception(message)
  * `github_releases_pick_asset()`'s `jq --arg field ... max_by(.[$field])`,
  * which is genuinely dynamic, not hardcoded to `download_count`.
  */
-object GithubReleasesAdapter : PluginSourceAdapter, PluginUrlMatcher {
-    override val sourceName: String = "github-releases"
+object GithubAdapter : PluginSourceAdapter, PluginUrlMatcher {
+    override val sourceName: String = "github"
     override val displayName: String = "Github"
 
     private val VALID_ID = Regex("^[0-9A-Za-z._-]+/[0-9A-Za-z._-]+$")
@@ -137,7 +137,7 @@ object GithubReleasesAdapter : PluginSourceAdapter, PluginUrlMatcher {
         trustRequested: Boolean,
     ) {
         if (!VALID_ID.matches(id)) {
-            throw GithubReleasesAdapterException("Invalid GitHub owner/repo id: $id")
+            throw GithubAdapterException("Invalid GitHub owner/repo id: $id")
         }
 
         val releasePath = if (!policy.pin.isNullOrEmpty()) {
@@ -149,7 +149,7 @@ object GithubReleasesAdapter : PluginSourceAdapter, PluginUrlMatcher {
         val response = try {
             SharedHttp.get("$githubApi$releasePath", authHeaders())
         } catch (e: IOException) {
-            throw GithubReleasesAdapterException("Could not reach GitHub for '$id'")
+            throw GithubAdapterException("Could not reach GitHub for '$id'")
         }
 
         if (response.status == 404) {
@@ -157,18 +157,18 @@ object GithubReleasesAdapter : PluginSourceAdapter, PluginUrlMatcher {
             return
         }
         if (response.status !in 200..299) {
-            throw GithubReleasesAdapterException("GitHub request for '$id' failed with HTTP ${response.status}")
+            throw GithubAdapterException("GitHub request for '$id' failed with HTTP ${response.status}")
         }
 
         val release = try {
             json.decodeFromString(GithubReleaseResponse.serializer(), response.body)
         } catch (e: Exception) {
-            throw GithubReleasesAdapterException("Could not parse GitHub release for '$id'")
+            throw GithubAdapterException("Could not parse GitHub release for '$id'")
         }
 
         val tagName = release.tagName
         if (tagName.isNullOrEmpty()) {
-            throw GithubReleasesAdapterException("GitHub returned no tag_name for '$id'")
+            throw GithubAdapterException("GitHub returned no tag_name for '$id'")
         }
 
         if (release.prerelease || release.draft) {
@@ -204,28 +204,28 @@ object GithubReleasesAdapter : PluginSourceAdapter, PluginUrlMatcher {
         val expectedHash = assetDigest?.takeIf { it.startsWith("sha256:") }?.removePrefix("sha256:")
 
         if (assetName.isNullOrEmpty() || assetUrl.isNullOrEmpty()) {
-            throw GithubReleasesAdapterException("GitHub release '$id' $tagName has an unusable asset entry")
+            throw GithubAdapterException("GitHub release '$id' $tagName has an unusable asset entry")
         }
 
         val target = pluginsDir.resolve(assetName)
-        val temporary = Files.createTempFile(pluginsDir, ".github-releases-download-", ".tmp")
+        val temporary = Files.createTempFile(pluginsDir, ".github-download-", ".tmp")
         try {
             Log.info("Downloading $id $tagName")
 
             val download = try {
                 SharedHttp.download(assetUrl, temporary, authHeaders())
             } catch (e: IOException) {
-                throw GithubReleasesAdapterException("Download failed for '$id' $tagName")
+                throw GithubAdapterException("Download failed for '$id' $tagName")
             }
 
             if (assetSize != null && download.size != assetSize) {
-                throw GithubReleasesAdapterException("'$id' $tagName has the wrong size")
+                throw GithubAdapterException("'$id' $tagName has the wrong size")
             }
 
             if (!expectedHash.isNullOrEmpty()) {
                 val actualHash = SharedHttp.sha256Hex(temporary)
                 if (!actualHash.equals(expectedHash, ignoreCase = true)) {
-                    throw GithubReleasesAdapterException("'$id' $tagName SHA-256 verification failed")
+                    throw GithubAdapterException("'$id' $tagName SHA-256 verification failed")
                 }
             } else {
                 // Log.info, not Log.warn -- see SpigetAdapter's equivalent

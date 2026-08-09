@@ -1,6 +1,6 @@
 package me.devsnox.jarlet.plugin
 
-import me.devsnox.jarlet.adapter.plugin.GithubReleasesAdapter
+import me.devsnox.jarlet.adapter.plugin.GithubAdapter
 import me.devsnox.jarlet.adapter.plugin.HangarAdapter
 import me.devsnox.jarlet.adapter.plugin.SpigetAdapter
 
@@ -16,13 +16,13 @@ import me.devsnox.jarlet.adapter.plugin.SpigetAdapter
  * keeping the bash contract's spirit (one adapter per source, sanity-
  * checked name -- here, simply "the map key").
  *
- * All three phase 4 adapters (`hangar`, `github-releases`, `spiget`, same
+ * All three phase 4 adapters (`hangar`, `github`, `spiget`, same
  * order they were built in bash) are now registered below.
  */
 object AdapterRegistry {
     private val adaptersBySource: Map<String, PluginSourceAdapter> = listOf(
         HangarAdapter,
-        GithubReleasesAdapter,
+        GithubAdapter,
         SpigetAdapter,
     ).associateBy { it.sourceName }
 

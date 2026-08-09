@@ -80,14 +80,14 @@ object SourceResolver {
      * Resolves a bare `add <identifier>` (no `--source` override) to a
      * `(source, id)` pair. Kotlin equivalent of `resolve_add_identifier()`
      * -- see that function's doc comment for the exact algorithm
-     * (`owner/repo` -> github-releases; all-digits -> probe hangar then
+     * (`owner/repo` -> github; all-digits -> probe hangar then
      * spiget; otherwise -> hangar exact slug, else spiget exact-name
      * search requiring exactly one match). Throws [ResolutionException] on
      * no-match/ambiguous-match; never guesses.
      */
     fun resolveAddIdentifier(identifier: String): Resolved {
         if (identifier.contains('/')) {
-            return Resolved("github-releases", identifier)
+            return Resolved("github", identifier)
         }
 
         if (identifier.all { it.isDigit() } && identifier.isNotEmpty()) {
@@ -139,8 +139,8 @@ object SourceResolver {
         val ok = when (source) {
             "hangar" -> HANGAR_ID.matches(id)
             "spiget" -> SPIGET_ID.matches(id)
-            "github-releases" -> GITHUB_RELEASES_ID.matches(id)
-            else -> throw ResolutionException("Unknown --source '$source' (expected hangar, spiget, or github-releases)")
+            "github" -> GITHUB_ID.matches(id)
+            else -> throw ResolutionException("Unknown --source '$source' (expected hangar, spiget, or github)")
         }
         if (!ok) {
             val expectation = when (source) {
@@ -204,5 +204,5 @@ object SourceResolver {
 
     private val HANGAR_ID = Regex("^[0-9A-Za-z._-]+$")
     private val SPIGET_ID = Regex("^[0-9]+$")
-    private val GITHUB_RELEASES_ID = Regex("^[0-9A-Za-z._-]+/[0-9A-Za-z._-]+$")
+    private val GITHUB_ID = Regex("^[0-9A-Za-z._-]+/[0-9A-Za-z._-]+$")
 }

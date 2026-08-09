@@ -26,7 +26,7 @@ import me.devsnox.jarlet.config.JarletToml
  *
  * NOT covered here (needs a real network call against Hangar/Spiget/GitHub,
  * out of scope for this network-free suite): actually fetching/updating a
- * plugin declared under `hangar`/`spiget`/`github-releases` -- covered
+ * plugin declared under `hangar`/`spiget`/`github` -- covered
  * instead by the adapter smoke tests under `integrationTest`.
  */
 class UpdateCommandTest : CommandTestSupport() {

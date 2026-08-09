@@ -69,12 +69,12 @@ class ListCommand : CliktCommand(name = "list") {
                 // showing a plugin as "not installed" if that ever drifts.
                 val i = installed.firstOrNull { it.source == d.source && it.id.equals(d.id, ignoreCase = true) }
                 // Spiget's declared id is a bare numeric resource id (unlike
-                // Hangar/GitHub-releases, whose id is already a readable
+                // Hangar/GitHub, whose id is already a readable
                 // slug/name) -- once the plugin has actually been
                 // installed/updated at least once, SpigetAdapter caches the
                 // real resource name in the installed-state record
                 // (i.displayName). Prefer that, keeping the id alongside for
-                // disambiguation/scripting, same as e.g. github-releases'
+                // disambiguation/scripting, same as e.g. github's
                 // "owner/repo" id already provides. Declared-but-never-
                 // installed Spiget plugins have no state record yet, so
                 // they still fall back to the bare id here -- expected, not

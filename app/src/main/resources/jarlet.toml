@@ -43,14 +43,14 @@ track = 'channel'
 
 [[plugins]]
 id = 'plan-player-analytics/Plan'
-source = 'github-releases'
+source = 'github'
 
 [plugins.policy]
 pin = '5.8.3579'
 
 [[plugins]]
 id = 'EssentialsX/Essentials'
-source = 'github-releases'
+source = 'github'
 
 [plugins.policy]
 pin = '2.22.0'

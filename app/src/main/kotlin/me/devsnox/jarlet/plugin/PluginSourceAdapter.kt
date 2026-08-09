@@ -5,7 +5,7 @@ import me.devsnox.jarlet.config.JarletToml
 
 /**
  * Shared contract every plugin source (`hangar`, `spiget`,
- * `github-releases` -- all phase 4, not implemented yet) will implement as
+ * `github` -- all phase 4, not implemented yet) will implement as
  * a Kotlin `object`, per the migration plan's architecture decision #2:
  * a static, reflection-free registry ([AdapterRegistry]) instead of bash's
  * self-describing sourced-file dynamic dispatch

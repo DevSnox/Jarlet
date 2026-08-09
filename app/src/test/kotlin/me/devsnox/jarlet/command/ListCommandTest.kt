@@ -84,7 +84,7 @@ class ListCommandTest : CommandTestSupport() {
             defaultToml(
                 plugins = listOf(
                     declaredPlugin("hangar", "EssentialsX", pin = "2.22.0"),
-                    declaredPlugin("github-releases", "owner/repo", channel = "Release"),
+                    declaredPlugin("github", "owner/repo", channel = "Release"),
                 ),
             ),
         )

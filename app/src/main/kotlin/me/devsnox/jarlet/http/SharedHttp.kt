@@ -18,7 +18,7 @@ import java.security.MessageDigest
  * Small shared HTTP/hashing plumbing used across every subsystem that talks
  * to an external HTTP API or downloads/verifies a file: all three plugin
  * source adapters ([me.devsnox.jarlet.adapter.plugin.HangarAdapter],
- * [me.devsnox.jarlet.adapter.plugin.GithubReleasesAdapter],
+ * [me.devsnox.jarlet.adapter.plugin.GithubAdapter],
  * [me.devsnox.jarlet.adapter.plugin.SpigetAdapter]), the server-software
  * adapter ([me.devsnox.jarlet.adapter.server.PaperAdapter]), plus
  * [me.devsnox.jarlet.plugin.SourceResolver] and
@@ -66,7 +66,7 @@ object SharedHttp {
      * on a network-level failure (mirrors curl's own non-zero exit before
      * any status is even produced); a non-2xx HTTP response is NOT an
      * exception here -- callers decide what a given status means (a 404 is
-     * "skip" for github-releases, but a hard failure for hangar/spiget).
+     * "skip" for github, but a hard failure for hangar/spiget).
      */
     fun get(url: String, headers: Map<String, String> = emptyMap()): Response {
         val request = requestBuilder(url, headers).GET().build()
