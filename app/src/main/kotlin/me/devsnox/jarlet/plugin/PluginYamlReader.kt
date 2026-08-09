@@ -79,7 +79,19 @@ object PluginYamlReader {
         }
 
         val parsed = try {
-            Load(LoadSettings.builder().build()).loadFromInputStream(yamlBytes.inputStream())
+            // Decode to a String and use loadFromString rather than
+            // loadFromInputStream: the latter wraps the stream in
+            // snakeyaml-engine's YamlUnicodeReader for BOM-based encoding
+            // auto-detection, whose static initializer eagerly builds a
+            // charset table including UTF-32BE -- a charset GraalVM
+            // native-image doesn't register by default, so merely loading
+            // that class throws ExceptionInInitializerError on the native
+            // binary, regardless of the actual file's encoding/content.
+            // plugin.yml is conventionally plain ASCII/UTF-8 (Bukkit/Spigot
+            // ecosystem), so decoding it ourselves up front sidesteps the
+            // auto-detection machinery -- and the exotic-charset support --
+            // entirely.
+            Load(LoadSettings.builder().build()).loadFromString(String(yamlBytes, Charsets.UTF_8))
         } catch (e: YamlEngineException) {
             return null
         } catch (e: RuntimeException) {
