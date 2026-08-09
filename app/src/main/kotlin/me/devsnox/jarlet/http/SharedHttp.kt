@@ -1,4 +1,4 @@
-package me.devsnox.jarlet.plugin
+package me.devsnox.jarlet.http
 
 import me.devsnox.jarlet.config.JarletVersion
 import me.devsnox.jarlet.config.SysConfig
@@ -14,26 +14,36 @@ import java.nio.file.Path
 import java.security.MessageDigest
 
 /**
- * Small shared HTTP/hashing plumbing used by all three plugin source
- * adapters ([me.devsnox.jarlet.adapter.plugin.HangarAdapter],
+ * Small shared HTTP/hashing plumbing used across every subsystem that talks
+ * to an external HTTP API or downloads/verifies a file: all three plugin
+ * source adapters ([me.devsnox.jarlet.adapter.plugin.HangarAdapter],
  * [me.devsnox.jarlet.adapter.plugin.GithubReleasesAdapter],
- * [me.devsnox.jarlet.adapter.plugin.SpigetAdapter]) plus [SourceResolver]
- * and [UntrustedExternalDownloader] -- every one of those bash counterparts
- * (`hangar.sh`/`github-releases.sh`/`spiget.sh`/`resolve.sh`/`trust.sh`)
- * repeats the same handful of `curl` invocation shapes (a plain GET
- * capturing status+body via `--write-out '\n%{http_code}'`, a status-only
- * existence probe via `--output /dev/null --write-out '%{http_code}'`, and
- * a retried file download via `--retry 3` with `--dump-header` for
- * `Content-Disposition`), so factoring them once here avoids repeating that
- * boilerplate five times over. This is plumbing shared across the plugin
- * subsystem, not a competing adapter contract -- [PluginSourceAdapter]
- * remains the only interface adapters implement.
+ * [me.devsnox.jarlet.adapter.plugin.SpigetAdapter]), the server-software
+ * adapter ([me.devsnox.jarlet.adapter.server.PaperAdapter]), plus
+ * [me.devsnox.jarlet.plugin.SourceResolver] and
+ * [me.devsnox.jarlet.plugin.UntrustedExternalDownloader] -- every one of
+ * those bash counterparts (`hangar.sh`/`github-releases.sh`/`spiget.sh`/
+ * `paper.sh`/`resolve.sh`/`trust.sh`) repeats the same handful of `curl`
+ * invocation shapes (a plain GET capturing status+body via
+ * `--write-out '\n%{http_code}'`, a status-only existence probe via
+ * `--output /dev/null --write-out '%{http_code}'`, and a retried file
+ * download via `--retry 3` with `--dump-header` for `Content-Disposition`),
+ * so factoring them once here avoids repeating that boilerplate across
+ * subsystems. Deliberately subsystem-neutral (package `me.devsnox.jarlet.http`,
+ * not `me.devsnox.jarlet.plugin`) precisely because it now serves both the
+ * plugin and server-software adapters, not just plugin plumbing -- it lived
+ * under `me.devsnox.jarlet.plugin` as `PluginHttp` while only plugin
+ * adapters used it, and was relocated/renamed once `PaperAdapter` also
+ * started depending on it, to keep the package honest about its audience.
+ * This is plumbing shared across subsystems, not a competing adapter
+ * contract -- [me.devsnox.jarlet.plugin.PluginSourceAdapter] and
+ * [me.devsnox.jarlet.adapter.server.ServerSoftwareAdapter] remain the only
+ * interfaces adapters implement.
  *
- * Follows [me.devsnox.jarlet.adapter.server.PaperAdapter]'s precedent:
- * `java.net.http.HttpClient` for HTTP, no extra dependency, per the
+ * Uses `java.net.http.HttpClient` for HTTP, no extra dependency, per the
  * migration plan's recommended defaults.
  */
-object PluginHttp {
+object SharedHttp {
     private val httpClient: HttpClient by lazy {
         HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NORMAL)

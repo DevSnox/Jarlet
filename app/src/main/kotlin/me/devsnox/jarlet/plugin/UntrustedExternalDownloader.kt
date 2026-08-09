@@ -1,6 +1,7 @@
 package me.devsnox.jarlet.plugin
 
 import me.devsnox.jarlet.Log
+import me.devsnox.jarlet.http.SharedHttp
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -80,7 +81,7 @@ object UntrustedExternalDownloader {
             Log.info("Downloading $label from $externalUrl")
 
             val download = try {
-                PluginHttp.download(externalUrl, temporary)
+                SharedHttp.download(externalUrl, temporary)
             } catch (e: IOException) {
                 throw UntrustedExternalDownloadException("Download failed for '$label' from $externalUrl")
             }
@@ -94,7 +95,7 @@ object UntrustedExternalDownloader {
             when {
                 !expectedHash.isNullOrEmpty() -> {
                     // A real checksum was available despite the external hosting (see the param doc above) -- verify it for real, same as any adapter-hosted download.
-                    val actualHash = PluginHttp.sha256Hex(temporary)
+                    val actualHash = SharedHttp.sha256Hex(temporary)
                     if (!actualHash.equals(expectedHash, ignoreCase = true)) {
                         throw UntrustedExternalDownloadException(
                             "'$label' SHA-256 verification failed for external download from $externalUrl",
