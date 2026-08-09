@@ -3,19 +3,19 @@
 # Sourced (not exec'd) into plugin.sh's process. This file decides WHICH
 # source adapter (hangar, spiget, ...) a given entry's `source` field maps
 # to, and lazily sources/loads that adapter -- it is not itself an adapter
-# and has no source-specific knowledge (compare ../source/plugin/hangar.sh,
+# and has no source-specific knowledge (compare ../adapter/plugin/hangar.sh,
 # which knows how to talk to the Hangar API). It also owns the two
 # "process every declared plugin" / "process one declared plugin" loops
 # that walk plugins_json and call route_plugin() for each entry.
 #
 # Adapter discovery/dispatch is self-describing, not hard-typed: the
-# `source` field of a declared entry names a file, ../source/plugin/<source>.sh,
+# `source` field of a declared entry names a file, ../adapter/plugin/<source>.sh,
 # which is lazily sourced on first use. That file must, when sourced,
 # set two variables -- ADAPTER_SOURCE_NAME (echoed back for a sanity check
 # that the file actually serves the source it was loaded for) and
 # ADAPTER_ENTRY_FUNCTION (the name of its entry-point function, called
 # dynamically). This file contains zero source-specific string literals;
-# see ../source/plugin/hangar.sh's header for the full adapter contract.
+# see ../adapter/plugin/hangar.sh's header for the full adapter contract.
 #
 # May assume plugin.sh has already defined: fail(), SCRIPT_DIR, and that
 # store.sh has already been sourced (route_plugin() is called by add too,
@@ -42,7 +42,7 @@ adapter_loaded_var() {
 route_plugin() {
     local server_dir="$1" plugins_dir="$2" source="$3" id="$4" policy_json="$5"
 
-    local adapter_file="$SCRIPT_DIR/../source/plugin/$source.sh"
+    local adapter_file="$SCRIPT_DIR/../adapter/plugin/$source.sh"
 
     if [[ ! -f "$adapter_file" ]]; then
         printf 'Skipping "%s" (%s): no adapter is implemented for this source\n' "$id" "$source"

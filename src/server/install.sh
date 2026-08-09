@@ -21,12 +21,12 @@ readonly JARLET_VERSION
 
 readonly USER_AGENT="${PROJECT_NAME}/${JARLET_VERSION} (${REPO_URL})"
 
-# Routes to a server-software source adapter under ../source/server/,
+# Routes to a server-software source adapter under ../adapter/server/,
 # lazily and only once per invocation -- mirrors plugin/router.sh's
 # route_plugin() shape (self-describing adapters, dynamic dispatch, lazy
 # load-on-first-use, zero package-specific string literals here), so a
 # second server-software package later is a small addition, not a rewrite.
-# See ../source/server/paper.sh's header for the full adapter contract.
+# See ../adapter/server/paper.sh's header for the full adapter contract.
 #
 # Bash 3.2 (macOS's default /usr/bin/bash, since Apple stopped bundling
 # GPLv3 bash) has no associative arrays, so loaded adapters are tracked
@@ -40,7 +40,7 @@ adapter_loaded_var() {
 dispatch_install() {
     local package="$1" minecraft_version="$2" target="$3"
 
-    local adapter_file="$SCRIPT_DIR/../source/server/$package.sh"
+    local adapter_file="$SCRIPT_DIR/../adapter/server/$package.sh"
 
     [[ -f "$adapter_file" ]] ||
         fail "Unknown [server].package '$package'; no adapter is implemented for this package"
