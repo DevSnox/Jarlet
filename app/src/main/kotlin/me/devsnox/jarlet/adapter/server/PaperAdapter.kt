@@ -15,7 +15,7 @@ import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 
 /** Thrown for the same failure cases `fail()` covers throughout `src/adapter/server/paper.sh`. */
-class PaperAdapterException(message: String) : Exception(message)
+class PaperAdapterException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
 /**
  * Paper server-software adapter -- Kotlin port of `src/adapter/server/paper.sh`.
@@ -101,25 +101,36 @@ object PaperAdapter : ServerSoftwareAdapter {
     }
 
     private fun fetchProject(): PaperProjectResponse {
-        val body = get("$paperApi/projects/paper") ?: throw PaperAdapterException("Could not query Paper versions")
+        val body = get("$paperApi/projects/paper", "Could not query Paper versions")
         return try {
             json.decodeFromString(PaperProjectResponse.serializer(), body)
-        } catch (e: Exception) {
-            throw PaperAdapterException("Could not query Paper versions")
+        } catch (e: kotlinx.serialization.SerializationException) {
+            throw PaperAdapterException("Could not query Paper versions: malformed response", cause = e)
         }
     }
 
     private fun fetchBuilds(minecraftVersion: String): List<PaperBuild> {
-        val body = get("$paperApi/projects/paper/versions/$minecraftVersion/builds")
-            ?: throw PaperAdapterException("Could not query builds for Minecraft $minecraftVersion")
+        val body = get(
+            "$paperApi/projects/paper/versions/$minecraftVersion/builds",
+            "Could not query builds for Minecraft $minecraftVersion",
+        )
         return try {
             json.decodeFromString(kotlinx.serialization.builtins.ListSerializer(PaperBuild.serializer()), body)
-        } catch (e: Exception) {
-            throw PaperAdapterException("Could not query builds for Minecraft $minecraftVersion")
+        } catch (e: kotlinx.serialization.SerializationException) {
+            throw PaperAdapterException(
+                "Could not query builds for Minecraft $minecraftVersion: malformed response",
+                cause = e,
+            )
         }
     }
 
-    private fun get(url: String): String? {
+    /**
+     * Fetches [url] as text, folding every failure mode into a [PaperAdapterException] whose
+     * message is prefixed with [errorPrefix] but distinguishes *why* -- network error, a
+     * non-2xx status (with the code), or an empty body -- since callers previously couldn't
+     * tell these apart.
+     */
+    private fun get(url: String, errorPrefix: String): String {
         val request = HttpRequest.newBuilder(URI.create(url))
             .header("User-Agent", userAgent)
             .GET()
@@ -128,13 +139,22 @@ object PaperAdapter : ServerSoftwareAdapter {
         val response = try {
             httpClient.send(request, HttpResponse.BodyHandlers.ofString())
         } catch (e: IOException) {
-            return null
+            throw PaperAdapterException("$errorPrefix: network error", cause = e)
         } catch (e: InterruptedException) {
             Thread.currentThread().interrupt()
-            return null
+            throw PaperAdapterException("$errorPrefix: interrupted", cause = e)
         }
 
-        return if (response.statusCode() in 200..299) response.body() else null
+        if (response.statusCode() !in 200..299) {
+            throw PaperAdapterException("$errorPrefix: HTTP ${response.statusCode()}")
+        }
+
+        val body = response.body()
+        if (body.isNullOrBlank()) {
+            throw PaperAdapterException("$errorPrefix: empty response")
+        }
+
+        return body
     }
 
     /** Mirrors `curl --retry 3` around the actual jar download (only this step retries, matching install.sh). */
