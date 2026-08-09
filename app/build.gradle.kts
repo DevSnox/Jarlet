@@ -10,11 +10,17 @@ application {
 }
 
 graalvmNative {
+    toolchainDetection.set(true)
     binaries {
         named("main") {
             imageName.set("jarlet")
             mainClass.set("me.devsnox.jarlet.MainKt")
             buildArgs.add("--no-fallback")
+            javaLauncher.set(
+                javaToolchains.launcherFor {
+                    languageVersion.set(JavaLanguageVersion.of(25))
+                }
+            )
         }
     }
 }
@@ -55,6 +61,20 @@ val generateVersion by tasks.registering {
     }
 }
 
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(25))
+        vendor.set(JvmVendorSpec.ORACLE)
+    }
+}
+
+kotlin {
+    jvmToolchain {
+        languageVersion.set(JavaLanguageVersion.of(25))
+        vendor.set(JvmVendorSpec.ORACLE)
+    }
+}
+
 sourceSets {
     main {
         kotlin.srcDir(generateVersion.map { generatedVersionDir.get() })
@@ -73,10 +93,6 @@ dependencies {
     implementation("org.snakeyaml:snakeyaml-engine:3.1.1")
 
     testImplementation(kotlin("test"))
-}
-
-kotlin {
-    jvmToolchain(25)
 }
 
 tasks.test {
