@@ -10,7 +10,7 @@
 # untouched by the jarlet.conf -> jarlet.toml migration since stop.sh has
 # no config-file dependency of its own.
 
-readonly SYS_CONFIG_FILE="$SCRIPT_DIR/jarlet-sys.conf"
+readonly SYS_CONFIG_FILE="$SCRIPT_DIR/../jarlet-sys.conf"
 
 fail() {
     printf 'Error: %s\n' "$1" >&2

@@ -5,7 +5,7 @@ readonly SCRIPT_DIR="$(
     CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd
 )"
 
-readonly VERSION_FILE="$SCRIPT_DIR/VERSION"
+readonly VERSION_FILE="$SCRIPT_DIR/../VERSION"
 
 fail() {
     printf 'Error: %s\n' "$1" >&2

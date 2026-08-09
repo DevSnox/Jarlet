@@ -5,7 +5,7 @@ readonly SCRIPT_DIR="$(
     CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd
 )"
 
-readonly SYS_CONFIG_FILE="$SCRIPT_DIR/jarlet-sys.conf"
+readonly SYS_CONFIG_FILE="$SCRIPT_DIR/../jarlet-sys.conf"
 
 fail() {
     printf 'Error: %s\n' "$1" >&2

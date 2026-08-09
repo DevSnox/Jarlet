@@ -5,13 +5,13 @@ readonly SCRIPT_DIR="$(
     CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd
 )"
 
-# shellcheck source=lib.sh
-. "$SCRIPT_DIR/lib.sh"
+# shellcheck source=../lib/lib.sh
+. "$SCRIPT_DIR/../lib/lib.sh"
 
 readonly PROJECT_NAME="$(sys_config_value PROJECT_NAME)"
 readonly REPO_URL="$(sys_config_value REPO_URL)"
 
-readonly VERSION_SCRIPT="$SCRIPT_DIR/version.sh"
+readonly VERSION_SCRIPT="$SCRIPT_DIR/../lib/version.sh"
 [[ -x "$VERSION_SCRIPT" ]] ||
     fail "$VERSION_SCRIPT does not exist or is not executable"
 
@@ -147,8 +147,8 @@ dispatch_plugin() {
             if (( ! HANGAR_LOADED )); then
                 command -v curl >/dev/null || fail "curl is required for the hangar source"
                 command -v shasum >/dev/null || fail "shasum is required for the hangar source"
-                # shellcheck source=sources/hangar.sh
-                . "$SCRIPT_DIR/sources/hangar.sh"
+                # shellcheck source=../source/plugin/hangar.sh
+                . "$SCRIPT_DIR/../source/plugin/hangar.sh"
                 HANGAR_LOADED=1
             fi
             process_hangar_plugin "$server_dir" "$plugins_dir" "$id" "$policy_json"

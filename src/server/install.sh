@@ -5,7 +5,7 @@ readonly SCRIPT_DIR="$(
     CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd
 )"
 
-readonly SYS_CONFIG_FILE="$SCRIPT_DIR/jarlet-sys.conf"
+readonly SYS_CONFIG_FILE="$SCRIPT_DIR/../jarlet-sys.conf"
 
 fail() {
     printf 'Error: %s\n' "$1" >&2
@@ -39,7 +39,7 @@ readonly PAPER_API="$(sys_config_value PAPER_API)"
 readonly PROJECT_NAME="$(sys_config_value PROJECT_NAME)"
 readonly REPO_URL="$(sys_config_value REPO_URL)"
 
-readonly VERSION_SCRIPT="$SCRIPT_DIR/version.sh"
+readonly VERSION_SCRIPT="$SCRIPT_DIR/../lib/version.sh"
 [[ -x "$VERSION_SCRIPT" ]] ||
     fail "$VERSION_SCRIPT does not exist or is not executable"
 
