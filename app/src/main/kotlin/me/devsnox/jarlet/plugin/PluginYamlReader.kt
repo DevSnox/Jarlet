@@ -8,32 +8,43 @@ import org.snakeyaml.engine.v2.api.LoadSettings
 import org.snakeyaml.engine.v2.exceptions.YamlEngineException
 
 /**
- * Minimal `name`/`version`/`main` extracted from a plugin jar's bundled
- * `plugin.yml`, per the "minimal extraction set" settled in
- * `prototyping/documentation/sources/plugin-yml-format.md`. Deliberately
- * excludes every other documented field (`depend`, `commands`,
- * `permissions`, `libraries`, ...) -- none of it feeds Jarlet's "better
- * name/version as a leading indicator" purpose, so parsing it would be
- * pure unused surface.
+ * `name`/`version`/`main`, plus `depend`/`softdepend`, extracted from a
+ * plugin jar's bundled `plugin.yml`, per
+ * `prototyping/documentation/sources/plugin-yml-format.md`. Still
+ * deliberately excludes every other documented field (`commands`,
+ * `permissions`, `libraries`, ...) -- none of it feeds any of Jarlet's
+ * current uses, so parsing it would be pure unused surface.
  *
- * All three fields are non-null here by construction: [PluginYamlReader.read]
- * only ever returns a non-null [PluginYamlInfo] when all three were present
- * and usable (see its doc comment for why "require all three" beats
- * "return partial/nullable data" for this use case).
+ * `name`/`version`/`main` keep the original "all three required, or the
+ * whole read is `null`" treatment: they're all genuinely required by the
+ * `plugin.yml` schema itself (see [PluginYamlReader.read]'s doc comment for
+ * the full "fail closed" reasoning), so a jar missing one isn't a
+ * legitimate plugin.yml at all.
+ *
+ * `depend`/`softdepend`, by contrast, are genuinely optional per the
+ * schema -- their absence is the normal, non-error case, not a sign of a
+ * malformed file. They therefore do NOT participate in the "required or
+ * null" gate above: they're additive data attached to an otherwise-valid
+ * read, always defaulting to an empty list rather than ever causing
+ * [PluginYamlReader.read] to return `null`.
  */
 data class PluginYamlInfo(
     val name: String,
     val version: String,
     val main: String,
+    val depend: List<String> = emptyList(),
+    val softdepend: List<String> = emptyList(),
 )
 
 /**
  * Reads the `plugin.yml` entry bundled at the root of a plugin jar's zip
  * archive and extracts [PluginYamlInfo] from it, per
- * `prototyping/documentation/sources/plugin-yml-format.md`. This is a
- * *leading indicator* only -- existing filename/adapter-based naming
- * remains the fallback and is not replaced by this. Nothing here is wired
- * into any adapter/command yet; that is a separate, later step.
+ * `prototyping/documentation/sources/plugin-yml-format.md`. The name/
+ * version/main portion is a *leading indicator* only -- existing filename/
+ * adapter-based naming remains the fallback and is not replaced by it. The
+ * `depend`/`softdepend` portion is wired into [me.devsnox.jarlet.plugin.AddCommand]
+ * and `me.devsnox.jarlet.command.UpdateCommand`'s post-install dependency
+ * check/`--resolve-dependencies` step.
  */
 object PluginYamlReader {
     private const val ENTRY_NAME = "plugin.yml"
@@ -85,7 +96,26 @@ object PluginYamlReader {
         val main = (map["main"] as? String)?.trim()?.takeIf { it.isNotEmpty() } ?: return null
         val version = resolvedVersion(map["version"] as? String) ?: return null
 
-        return PluginYamlInfo(name = name, version = version, main = main)
+        return PluginYamlInfo(
+            name = name,
+            version = version,
+            main = main,
+            depend = stringListOrEmpty(map["depend"]),
+            softdepend = stringListOrEmpty(map["softdepend"]),
+        )
+    }
+
+    /**
+     * Parses a `depend`/`softdepend` value as a list of non-blank strings,
+     * defensively: since these fields never gate whether [read] "succeeded"
+     * at all (see [PluginYamlInfo]'s doc comment), any shape other than a
+     * proper YAML list of strings -- wrong type entirely, or a list with
+     * non-string entries -- is treated as an empty list rather than failing
+     * the whole read.
+     */
+    private fun stringListOrEmpty(raw: Any?): List<String> {
+        val list = raw as? List<*> ?: return emptyList()
+        return list.mapNotNull { (it as? String)?.trim()?.takeIf { s -> s.isNotEmpty() } }
     }
 
     /**

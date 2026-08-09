@@ -53,6 +53,10 @@ class AddCommand : CliktCommand(name = "add") {
     )
     private val trust by option("--trust", help = "Proceed past an external-hosting gate this adapter can't otherwise resolve.")
         .flag(default = false)
+    private val resolveDependencies by option(
+        "--resolve-dependencies",
+        help = "Automatically resolve and add this plugin's plugin.yml \"depend\" entries that aren't already declared.",
+    ).flag(default = false)
 
     override fun run() = serverCommandBody {
         if (pin != null && channel != null) {
@@ -91,5 +95,9 @@ class AddCommand : CliktCommand(name = "add") {
         echo("""Declared "$id" ($source) in $tomlFile""")
 
         PluginRouter.route(serverDir, pluginsDir, source, id, policy, trust, echo = { echo(it) })
+
+        PluginDependencyChecker.checkAndResolve(
+            serverDir, pluginsDir, tomlFile, updatedToml, source, id, resolveDependencies, trust, echo = { echo(it) },
+        )
     }
 }

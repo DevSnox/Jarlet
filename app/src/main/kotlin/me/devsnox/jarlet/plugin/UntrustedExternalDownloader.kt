@@ -131,12 +131,32 @@ object UntrustedExternalDownloader {
             // command's display showing a real (if generic) value instead of
             // misreporting an actually-installed trusted jar as "not
             // installed".
+            //
+            // When the caller left `versionName` at that generic default
+            // (Spiget's case), OR passed a value that is really just the
+            // adapter's own `id` echoed back rather than a genuine version
+            // (Hangar's live Geyser data: `/latest?channel=...` resolves to
+            // the literal label "Geyser", i.e. Hangar's channel-latest label
+            // for this project equals its own project id -- a known Hangar
+            // data quirk, not a real version identity), best-effort-check
+            // the jar's own bundled plugin.yml for a real version before
+            // falling back to whatever the caller passed. Never overrides a
+            // versionName that differs from both the generic literal and
+            // the id -- that's assumed to be a genuinely-resolved value
+            // (e.g. Hangar's `targetVersion` for any other project).
+            val versionNameIsGeneric = versionName == "external" || versionName.equals(id, ignoreCase = true)
+            val resolvedVersionName = if (versionNameIsGeneric) {
+                PluginYamlReader.read(target)?.version ?: versionName
+            } else {
+                versionName
+            }
+
             PluginStateStore.write(
                 serverDir,
                 InstalledVersion(
                     source = source,
                     id = id,
-                    versionName = versionName,
+                    versionName = resolvedVersionName,
                     versionId = null,
                     channelName = channelName,
                     sha256 = verifiedHash,

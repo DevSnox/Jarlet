@@ -9,6 +9,7 @@ import com.github.ajalt.clikt.parameters.options.option
 import me.devsnox.jarlet.command.lib.resolvePluginCommandContext
 import me.devsnox.jarlet.command.lib.serverCommandBody
 import java.nio.file.Files
+import me.devsnox.jarlet.plugin.PluginDependencyChecker
 import me.devsnox.jarlet.plugin.PluginRouter
 
 /**
@@ -47,9 +48,13 @@ class UpdateCommand : CliktCommand(name = "update") {
 
     private val trust by option("--trust", help = "Proceed past an external-hosting gate this adapter can't otherwise resolve.")
         .flag(default = false)
+    private val resolveDependencies by option(
+        "--resolve-dependencies",
+        help = "Automatically resolve and add updated plugins' plugin.yml \"depend\" entries that aren't already declared.",
+    ).flag(default = false)
 
     override fun run() = serverCommandBody {
-        val (serverDir, _, toml) = resolvePluginCommandContext(name)
+        val (serverDir, tomlFile, toml) = resolvePluginCommandContext(name)
 
         val pluginsDir = serverDir.resolve("plugins")
         Files.createDirectories(pluginsDir)
@@ -57,8 +62,22 @@ class UpdateCommand : CliktCommand(name = "update") {
         val target = identifier
         if (target == null) {
             PluginRouter.routeAll(serverDir, pluginsDir, toml.plugins, trust, echo = { echo(it) })
+
+            var currentToml = toml
+            for (entry in toml.plugins) {
+                currentToml = PluginDependencyChecker.checkAndResolve(
+                    serverDir, pluginsDir, tomlFile, currentToml, entry.source, entry.id, resolveDependencies, trust, echo = { echo(it) },
+                )
+            }
         } else {
             PluginRouter.routeOne(serverDir, pluginsDir, toml.plugins, target, trust, echo = { echo(it) })
+
+            val entry = toml.plugins.firstOrNull { it.id.equals(target, ignoreCase = true) }
+            if (entry != null) {
+                PluginDependencyChecker.checkAndResolve(
+                    serverDir, pluginsDir, tomlFile, toml, entry.source, entry.id, resolveDependencies, trust, echo = { echo(it) },
+                )
+            }
         }
     }
 }
