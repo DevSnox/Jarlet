@@ -1,30 +1,30 @@
-package me.devsnox.jarlet.plugin
+package me.devsnox.jarlet.http
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 /**
- * Regression coverage for `PluginHttp.contentDispositionFileName()` --
+ * Regression coverage for `SharedHttp.contentDispositionFileName()` --
  * specifically the RFC 5987 `filename*=` decode path, which had a real bug:
  * a capture-group regex that excluded `'` truncated GeyserMC's real header
  * value (`filename*=UTF-8''Geyser-Spigot.jar`) down to just `"UTF-8"` at the
  * first quote, since RFC 5987's `charset'lang'value` format is delimited by
  * that exact character.
  */
-class PluginHttpTest {
+class SharedHttpTest {
 
     @Test
     fun `decodes GeyserMC's real Content-Disposition header via the RFC 5987 filename star parameter`() {
         val header = """attachment; filename="=?UTF-8?Q?Geyser-Spigot.jar?="; filename*=UTF-8''Geyser-Spigot.jar"""
-        assertEquals("Geyser-Spigot.jar", PluginHttp.contentDispositionFileName(header))
+        assertEquals("Geyser-Spigot.jar", SharedHttp.contentDispositionFileName(header))
     }
 
     @Test
     fun `decodes a bare RFC 5987 filename star parameter with no language tag`() {
         assertEquals(
             "Geyser-Spigot.jar",
-            PluginHttp.contentDispositionFileName("attachment; filename*=UTF-8''Geyser-Spigot.jar"),
+            SharedHttp.contentDispositionFileName("attachment; filename*=UTF-8''Geyser-Spigot.jar"),
         )
     }
 
@@ -32,7 +32,7 @@ class PluginHttpTest {
     fun `decodes a percent-encoded RFC 5987 value`() {
         assertEquals(
             "my file.jar",
-            PluginHttp.contentDispositionFileName("attachment; filename*=UTF-8''my%20file.jar"),
+            SharedHttp.contentDispositionFileName("attachment; filename*=UTF-8''my%20file.jar"),
         )
     }
 
@@ -40,7 +40,7 @@ class PluginHttpTest {
     fun `falls back to decoding an RFC 2047 encoded-word in a plain filename when no filename star is present`() {
         assertEquals(
             "Geyser-Spigot.jar",
-            PluginHttp.contentDispositionFileName("""attachment; filename="=?UTF-8?Q?Geyser-Spigot.jar?=""""),
+            SharedHttp.contentDispositionFileName("""attachment; filename="=?UTF-8?Q?Geyser-Spigot.jar?=""""),
         )
     }
 
@@ -48,12 +48,12 @@ class PluginHttpTest {
     fun `returns a plain filename unchanged when neither encoding is present`() {
         assertEquals(
             "EssentialsX-2.22.0.jar",
-            PluginHttp.contentDispositionFileName("""attachment; filename="EssentialsX-2.22.0.jar""""),
+            SharedHttp.contentDispositionFileName("""attachment; filename="EssentialsX-2.22.0.jar""""),
         )
     }
 
     @Test
     fun `returns null for a missing header`() {
-        assertNull(PluginHttp.contentDispositionFileName(null))
+        assertNull(SharedHttp.contentDispositionFileName(null))
     }
 }

@@ -73,8 +73,8 @@ class AddCommand : CliktCommand(name = "add") {
             SourceResolver.validateSourceIdShape(sourceOverride!!, identifier)
             sourceOverride!! to identifier
         } else {
-            val resolved = SourceResolver.resolveAddIdentifier(identifier, warn = { echo(it, err = true) })
-            echo("""Resolved "$identifier" to ${resolved.id} (${resolved.source})""")
+            val resolved = SourceResolver.resolveAddIdentifier(identifier)
+            Log.info("""Resolved "$identifier" to ${resolved.id} (${resolved.source})""")
             resolved.source to resolved.id
         }
 
@@ -91,14 +91,14 @@ class AddCommand : CliktCommand(name = "add") {
 
         val updatedToml = toml.copy(plugins = toml.plugins + JarletToml.Plugin(source = source, id = id, policy = policy))
 
-        echo("Note: this rewrites $tomlFile in full; hand-written comments and formatting are not preserved.")
+        Log.info("Note: this rewrites $tomlFile in full; hand-written comments and formatting are not preserved.")
         updatedToml.write(tomlFile)
-        echo("""Declared "$id" ($source) in $tomlFile""")
+        Log.info("""Declared "$id" ($source) in $tomlFile""")
 
-        PluginRouter.route(serverDir, pluginsDir, source, id, policy, trust, echo = { echo(it) })
+        PluginRouter.route(serverDir, pluginsDir, source, id, policy, trust)
 
         PluginDependencyChecker.checkAndResolve(
-            serverDir, pluginsDir, tomlFile, updatedToml, source, id, resolveDependencies, trust, echo = { echo(it) },
+            serverDir, pluginsDir, tomlFile, updatedToml, source, id, resolveDependencies, trust,
         )
     }
 }

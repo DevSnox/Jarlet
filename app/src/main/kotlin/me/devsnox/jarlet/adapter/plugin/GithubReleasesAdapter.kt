@@ -12,7 +12,7 @@ import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.config.JarletToml
 import me.devsnox.jarlet.config.SysConfig
 import me.devsnox.jarlet.plugin.InstalledVersion
-import me.devsnox.jarlet.plugin.PluginHttp
+import me.devsnox.jarlet.http.SharedHttp
 import me.devsnox.jarlet.plugin.PluginSourceAdapter
 import me.devsnox.jarlet.plugin.PluginStateStore
 import me.devsnox.jarlet.plugin.PluginUrlMatcher
@@ -147,7 +147,7 @@ object GithubReleasesAdapter : PluginSourceAdapter, PluginUrlMatcher {
         }
 
         val response = try {
-            PluginHttp.get("$githubApi$releasePath", authHeaders())
+            SharedHttp.get("$githubApi$releasePath", authHeaders())
         } catch (e: IOException) {
             throw GithubReleasesAdapterException("Could not reach GitHub for '$id'")
         }
@@ -172,26 +172,26 @@ object GithubReleasesAdapter : PluginSourceAdapter, PluginUrlMatcher {
         }
 
         if (release.prerelease || release.draft) {
-            println("Skipping \"$id\": release $tagName is a prerelease/draft")
+            Log.info("Skipping \"$id\": release $tagName is a prerelease/draft")
             return
         }
 
         val installed = PluginStateStore.read(serverDir, sourceName, id)?.versionName
         if (installed == tagName) {
-            println("\"$id\" is already up to date ($tagName)")
+            Log.info("\"$id\" is already up to date ($tagName)")
             return
         }
 
         val (count, asset) = pickAsset(release.assets)
         if (count == 0 || asset == null) {
-            println("Skipping \"$id\" $tagName: no asset in this release looks like a plugin jar; install manually")
+            Log.info("Skipping \"$id\" $tagName: no asset in this release looks like a plugin jar; install manually")
             return
         }
 
         if (count > 1) {
             val pickedName = asset.stringField("name")
             val pickedTiebreakValue = asset[tiebreakField]?.jsonPrimitive?.contentOrNull
-            println(
+            Log.info(
                 "Multiple candidate assets found for \"$id\" $tagName; using \"$pickedName\" (highest $tiebreakField: $pickedTiebreakValue)",
             )
         }
@@ -210,10 +210,10 @@ object GithubReleasesAdapter : PluginSourceAdapter, PluginUrlMatcher {
         val target = pluginsDir.resolve(assetName)
         val temporary = Files.createTempFile(pluginsDir, ".github-releases-download-", ".tmp")
         try {
-            println("Downloading $id $tagName")
+            Log.info("Downloading $id $tagName")
 
             val download = try {
-                PluginHttp.download(assetUrl, temporary, authHeaders())
+                SharedHttp.download(assetUrl, temporary, authHeaders())
             } catch (e: IOException) {
                 throw GithubReleasesAdapterException("Download failed for '$id' $tagName")
             }
@@ -223,12 +223,15 @@ object GithubReleasesAdapter : PluginSourceAdapter, PluginUrlMatcher {
             }
 
             if (!expectedHash.isNullOrEmpty()) {
-                val actualHash = PluginHttp.sha256Hex(temporary)
+                val actualHash = SharedHttp.sha256Hex(temporary)
                 if (!actualHash.equals(expectedHash, ignoreCase = true)) {
                     throw GithubReleasesAdapterException("'$id' $tagName SHA-256 verification failed")
                 }
             } else {
-                println("Warning: no digest published for \"$id\" $tagName asset; verified by size only")
+                // Log.info, not Log.warn -- see SpigetAdapter's equivalent
+                // comment: this was plain (stdout) println() before this
+                // migration, so the literal "Warning: " text is kept as-is.
+                Log.info("Warning: no digest published for \"$id\" $tagName asset; verified by size only")
             }
 
             Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING)
@@ -251,9 +254,9 @@ object GithubReleasesAdapter : PluginSourceAdapter, PluginUrlMatcher {
             ),
         )
 
-        println("Installed $id $tagName as $target")
+        Log.info("Installed $id $tagName as $target")
         if (!expectedHash.isNullOrEmpty()) {
-            println("SHA-256: $expectedHash")
+            Log.info("SHA-256: $expectedHash")
         }
     }
 

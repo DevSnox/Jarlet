@@ -7,7 +7,7 @@ import me.devsnox.jarlet.config.SysConfig
 import me.devsnox.jarlet.config.JarletToml
 import me.devsnox.jarlet.plugin.ExternalUrlRedirector
 import me.devsnox.jarlet.plugin.InstalledVersion
-import me.devsnox.jarlet.plugin.PluginHttp
+import me.devsnox.jarlet.http.SharedHttp
 import me.devsnox.jarlet.plugin.PluginSourceAdapter
 import me.devsnox.jarlet.plugin.PluginStateStore
 import me.devsnox.jarlet.plugin.UntrustedExternalDownloader
@@ -74,7 +74,7 @@ object HangarAdapter : PluginSourceAdapter {
             )
 
         val response = try {
-            PluginHttp.post("$hangarApi/authenticate", mapOf("apiKey" to apiKey))
+            SharedHttp.post("$hangarApi/authenticate", mapOf("apiKey" to apiKey))
         } catch (e: IOException) {
             throw HangarAdapterException("Hangar authentication failed")
         }
@@ -101,7 +101,7 @@ object HangarAdapter : PluginSourceAdapter {
         if (jwt.isNullOrEmpty()) authenticate()
 
         var response = try {
-            PluginHttp.get("$hangarApi$path", mapOf("Authorization" to "HangarAuth $jwt"))
+            SharedHttp.get("$hangarApi$path", mapOf("Authorization" to "HangarAuth $jwt"))
         } catch (e: IOException) {
             throw HangarAdapterException("Hangar request failed: $path")
         }
@@ -109,7 +109,7 @@ object HangarAdapter : PluginSourceAdapter {
         if (response.status == 401) {
             authenticate()
             response = try {
-                PluginHttp.get("$hangarApi$path", mapOf("Authorization" to "HangarAuth $jwt"))
+                SharedHttp.get("$hangarApi$path", mapOf("Authorization" to "HangarAuth $jwt"))
             } catch (e: IOException) {
                 throw HangarAdapterException("Hangar request failed: $path")
             }
@@ -232,7 +232,7 @@ object HangarAdapter : PluginSourceAdapter {
             if (jwt.isNullOrEmpty()) authenticate()
 
             val download = try {
-                PluginHttp.download(
+                SharedHttp.download(
                     "$hangarApi/projects/$slug/versions/$targetVersion/PAPER/download",
                     temporary,
                     mapOf("Authorization" to "HangarAuth $jwt"),
@@ -245,7 +245,7 @@ object HangarAdapter : PluginSourceAdapter {
                 throw HangarAdapterException("'$slug' $targetVersion has the wrong size")
             }
 
-            val actualHash = PluginHttp.sha256Hex(temporary)
+            val actualHash = SharedHttp.sha256Hex(temporary)
             if (!actualHash.equals(expectedHash, ignoreCase = true)) {
                 throw HangarAdapterException("'$slug' $targetVersion SHA-256 verification failed")
             }

@@ -8,7 +8,7 @@ import me.devsnox.jarlet.config.JarletToml
 import me.devsnox.jarlet.config.SysConfig
 import me.devsnox.jarlet.plugin.ExternalUrlRedirector
 import me.devsnox.jarlet.plugin.InstalledVersion
-import me.devsnox.jarlet.plugin.PluginHttp
+import me.devsnox.jarlet.http.SharedHttp
 import me.devsnox.jarlet.plugin.PluginSourceAdapter
 import me.devsnox.jarlet.plugin.PluginStateStore
 import me.devsnox.jarlet.plugin.UntrustedExternalDownloader
@@ -70,7 +70,7 @@ object SpigetAdapter : PluginSourceAdapter {
     /** Plain GET against `$SPIGET_API$path`. No auth header of any kind -- confirmed live that Spiget's API is fully anonymous. Mirrors `spiget_get()`. */
     private fun get(path: String): String {
         val response = try {
-            PluginHttp.get("$spigetApi$path")
+            SharedHttp.get("$spigetApi$path")
         } catch (e: IOException) {
             throw SpigetAdapterException("Spiget request failed: $path")
         }
@@ -255,7 +255,7 @@ object SpigetAdapter : PluginSourceAdapter {
             // this only runs after the cheap metadata check above already
             // found a mismatch.
             val download = try {
-                PluginHttp.download("$spigetApi/resources/$id/versions/$targetVersionId/download/proxy", temporary)
+                SharedHttp.download("$spigetApi/resources/$id/versions/$targetVersionId/download/proxy", temporary)
             } catch (e: IOException) {
                 throw SpigetAdapterException("Download failed for '$id' $displayVersion")
             }
