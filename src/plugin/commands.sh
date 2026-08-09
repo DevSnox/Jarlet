@@ -8,7 +8,7 @@
 # fail(), SCRIPT_DIR, and that store.sh, resolve.sh, and router.sh have
 # already been sourced.
 
-# `plugins.sh <name> add <identifier> [--pin <version> | --channel <name>] [--source <hangar|spiget|github-releases>]`
+# `plugins.sh <name> add <identifier> [--pin <version> | --channel <name>] [--source <hangar|spiget|github-releases>] [--trust]`
 #
 # `source` is no longer a positional argument -- it's inferred from
 # `identifier` by resolve.sh's resolve_add_identifier() (owner/repo ->
@@ -28,12 +28,12 @@ cmd_add() {
     shift 4
 
     (( $# >= 1 )) ||
-        fail "Usage: plugins.sh <name> add <identifier> [--pin <version> | --channel <name>] [--source <hangar|spiget|github-releases>]"
+        fail "Usage: plugins.sh <name> add <identifier> [--pin <version> | --channel <name>] [--source <hangar|spiget|github-releases>] [--trust]"
 
     local identifier="$1"
     shift
 
-    local pin="" channel="" source_override=""
+    local pin="" channel="" source_override="" trust_requested=false
     while (( $# > 0 )); do
         case "$1" in
             --pin)
@@ -50,6 +50,13 @@ cmd_add() {
                 (( $# >= 2 )) || fail "--source requires a value"
                 source_override="$2"
                 shift 2
+                ;;
+            --trust)
+                # See trust.sh's header -- proceeds past (and remembers)
+                # an external-hosting gate this adapter can't otherwise
+                # resolve, mirroring start.sh's --accept-eula.
+                trust_requested=true
+                shift
                 ;;
             *)
                 fail "Unknown option '$1' for add"
@@ -103,7 +110,7 @@ cmd_add() {
     write_toml_file "$toml_file" "$new_json"
     printf 'Declared "%s" (%s) in %s\n' "$id" "$source" "$toml_file"
 
-    route_plugin "$server_dir" "$plugins_dir" "$source" "$id" "$policy_json"
+    route_plugin "$server_dir" "$plugins_dir" "$source" "$id" "$policy_json" "$trust_requested"
 }
 
 # `plugins.sh <name> remove <identifier>`

@@ -24,9 +24,13 @@
 #   - May assume plugins.sh has already defined: fail(), config_value(),
 #     sys_config_value(), $SCRIPT_DIR, $USER_AGENT, plugin_state_file(),
 #     read_installed_version(), write_installed_version() (all from
-#     store.sh), route_plugin() (router.sh), and try_resolve_external_url()/
-#     persist_external_redirect() (redirect.sh), and that jq/dasel are
-#     already confirmed to be on PATH.
+#     store.sh), route_plugin() (router.sh), try_resolve_external_url()/
+#     persist_external_redirect() (redirect.sh), and
+#     handle_untrusted_external_url() (trust.sh -- the --trust fallback
+#     tried after try_resolve_external_url() fails to recognize the URL),
+#     and that jq/dasel are already confirmed to be on PATH.
+#   - Entry point receives trust_requested ("true"/"false") as its 5th
+#     argument, threaded from route_plugin() -- see trust.sh's header.
 #   - Must check any dependencies of its own (curl, shasum, ...) at source
 #     time, before ADAPTER_SOURCE_NAME/ADAPTER_ENTRY_FUNCTION are set;
 #     plugins.sh does not check them unconditionally on its behalf.
@@ -126,6 +130,7 @@ hangar_get() {
 
 process_hangar_plugin() {
     local server_dir="$1" plugins_dir="$2" slug="$3" policy_json="$4"
+    local trust_requested="${5:-false}"
 
     [[ "$slug" =~ ^[0-9A-Za-z._-]+$ ]] ||
         fail "Invalid Hangar project slug: $slug"
@@ -206,13 +211,27 @@ process_hangar_plugin() {
                 "$slug" "$target_version" "$external_url" "$REDIRECT_ID" "$REDIRECT_SOURCE"
 
             persist_external_redirect "$server_dir" "hangar" "$slug" "$REDIRECT_SOURCE" "$REDIRECT_ID" "$REDIRECT_POLICY_JSON"
-            route_plugin "$server_dir" "$plugins_dir" "$REDIRECT_SOURCE" "$REDIRECT_ID" "$REDIRECT_POLICY_JSON"
+            route_plugin "$server_dir" "$plugins_dir" "$REDIRECT_SOURCE" "$REDIRECT_ID" "$REDIRECT_POLICY_JSON" "$trust_requested"
             return $?
         fi
 
-        printf 'Skipping "%s" %s: hosted externally, install manually: %s\n' \
-            "$slug" "$target_version" "$external_url"
-        return 0
+        # Next fallback (trust.sh): the URL isn't recognizable as another
+        # adapter's, but the user may have already trusted (or now be
+        # trusting, via --trust) the domain it's hosted on -- see trust.sh's
+        # header for the full mechanism. Hangar's fileInfo (its own
+        # checksum/size) and its externalUrl are confirmed live to be
+        # mutually exclusive on real data (Geyser: fileInfo=null whenever
+        # externalUrl is set) -- but fileInfo is still read here and passed
+        # through in case that ever isn't true for some other project;
+        # handle_untrusted_external_url() only uses it if non-empty.
+        local ext_hash ext_size
+        ext_hash="$(jq -r '.downloads.PAPER.fileInfo.sha256Hash // empty' <<<"$version_json")"
+        ext_size="$(jq -r '.downloads.PAPER.fileInfo.sizeBytes // empty' <<<"$version_json")"
+
+        handle_untrusted_external_url \
+            "$server_dir" "$plugins_dir" "hangar" "$slug" "$slug" \
+            "$external_url" "$ext_hash" "$ext_size" "$slug.jar" "$trust_requested"
+        return $?
     fi
 
     local file_name expected_hash expected_size

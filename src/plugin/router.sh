@@ -107,8 +107,17 @@ load_adapter() {
 # resolution (once it has rewritten jarlet.toml to the redirected
 # source/id, it calls back into this exact same path to actually fetch),
 # so all of them go through the exact same routing path.
+#
+# trust_requested ("true"/"false", default "false" when omitted) is
+# threaded straight through to the adapter's entry function as its final
+# argument -- see trust.sh's header and hangar.sh's/spiget.sh's external-
+# hosting gates for what it does. Kept as an explicit parameter (not an
+# implicit global) for the same reason server_dir/policy_json are: it's
+# how every other piece of per-invocation state already flows through this
+# call chain.
 route_plugin() {
     local server_dir="$1" plugins_dir="$2" source="$3" id="$4" policy_json="$5"
+    local trust_requested="${6:-false}"
 
     if ! load_adapter "$source"; then
         printf 'Skipping "%s" (%s): no adapter is implemented for this source\n' "$id" "$source"
@@ -118,7 +127,7 @@ route_plugin() {
     local loaded_var
     loaded_var="$(adapter_loaded_var "$source")"
 
-    "${!loaded_var}" "$server_dir" "$plugins_dir" "$id" "$policy_json"
+    "${!loaded_var}" "$server_dir" "$plugins_dir" "$id" "$policy_json" "$trust_requested"
 }
 
 # Runs the identify->check-version->update flow for every declared plugin.
@@ -127,6 +136,7 @@ route_plugin() {
 # `plugins.sh <name>` invocation with no subcommand at all.
 run_update_all() {
     local server_dir="$1" plugins_dir="$2" plugins_json="$3"
+    local trust_requested="${4:-false}"
     local count i entry source id policy_json
 
     count="$(jq '(.plugins // []) | length' <<<"$plugins_json")"
@@ -142,7 +152,7 @@ run_update_all() {
         id="$(jq -r '.id' <<<"$entry")"
         policy_json="$(jq -c '.policy' <<<"$entry")"
 
-        route_plugin "$server_dir" "$plugins_dir" "$source" "$id" "$policy_json"
+        route_plugin "$server_dir" "$plugins_dir" "$source" "$id" "$policy_json" "$trust_requested"
     done
 }
 
@@ -155,6 +165,7 @@ run_update_all() {
 # plugins-state.json already uses.
 run_update_one() {
     local plugins_json="$1" server_dir="$2" plugins_dir="$3" identifier="$4"
+    local trust_requested="${5:-false}"
     local source id entry policy_json
 
     resolve_declared_identifier "$plugins_json" "$identifier" "update"
@@ -173,5 +184,5 @@ run_update_one() {
         fail "No declared plugin with source '$source' and id '$id'"
 
     policy_json="$(jq -c '.policy' <<<"$entry")"
-    route_plugin "$server_dir" "$plugins_dir" "$source" "$id" "$policy_json"
+    route_plugin "$server_dir" "$plugins_dir" "$source" "$id" "$policy_json" "$trust_requested"
 }

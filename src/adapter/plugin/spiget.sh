@@ -12,14 +12,17 @@
 #   - May assume plugins.sh has already defined: fail(), config_value(),
 #     sys_config_value(), $SCRIPT_DIR, $USER_AGENT, plugin_state_file(),
 #     read_installed_version(), write_installed_version() (all from
-#     store.sh), route_plugin() (router.sh), and try_resolve_external_url()/
+#     store.sh), route_plugin() (router.sh), try_resolve_external_url()/
 #     persist_external_redirect() (redirect.sh) -- the last two are what the
 #     external-hosting gate below uses to redirect to another adapter when
 #     Spiget's file.externalUrl is recognizable (currently: GitHub release
 #     URLs, via github-releases.sh's ADAPTER_URL_MATCHER; see redirect.sh's
-#     header for the full mechanism) -- and that jq/dasel are already
-#     confirmed to be on PATH.
+#     header for the full mechanism) -- and handle_untrusted_external_url()
+#     (trust.sh), the --trust fallback tried when that redirect fails, and
+#     that jq/dasel are already confirmed to be on PATH.
 #   - Must check its own dependencies (curl) at source time.
+#   - Entry point receives trust_requested ("true"/"false") as its 5th
+#     argument, threaded from route_plugin() -- see trust.sh's header.
 #
 # Spiget (https://api.spiget.org/v2) needs no API key/auth (confirmed live
 # against the real API), unlike Hangar -- so unlike hangar.sh there is no
@@ -161,6 +164,7 @@ spiget_sanitize_filename() {
 
 process_spiget_plugin() {
     local server_dir="$1" plugins_dir="$2" id="$3" policy_json="$4"
+    local trust_requested="${5:-false}"
 
     [[ "$id" =~ ^[0-9]+$ ]] ||
         fail "Invalid Spiget resource id: $id (must be numeric)"
@@ -193,13 +197,25 @@ process_spiget_plugin() {
                 "${name:-$id}" "$id" "$external_url" "$REDIRECT_ID" "$REDIRECT_SOURCE"
 
             persist_external_redirect "$server_dir" "spiget" "$id" "$REDIRECT_SOURCE" "$REDIRECT_ID" "$REDIRECT_POLICY_JSON"
-            route_plugin "$server_dir" "$plugins_dir" "$REDIRECT_SOURCE" "$REDIRECT_ID" "$REDIRECT_POLICY_JSON"
+            route_plugin "$server_dir" "$plugins_dir" "$REDIRECT_SOURCE" "$REDIRECT_ID" "$REDIRECT_POLICY_JSON" "$trust_requested"
             return $?
         fi
 
-        printf 'Skipping "%s" (%s): resource is hosted externally, install manually%s\n' \
-            "${name:-$id}" "$id" "${external_url:+ ($external_url)}"
-        return 0
+        if [[ -z "$external_url" ]]; then
+            printf 'Skipping "%s" (%s): resource is hosted externally, install manually (no external URL was reported by Spiget)\n' \
+                "${name:-$id}" "$id"
+            return 0
+        fi
+
+        # Next fallback (trust.sh): not recognizable as another adapter's
+        # URL, but the domain may already be trusted (or now be trusted via
+        # --trust) -- see trust.sh's header. Spiget exposes no checksum of
+        # any kind for any resource (confirmed live, see header comment
+        # above), so no expected_hash/expected_size is ever available here.
+        handle_untrusted_external_url \
+            "$server_dir" "$plugins_dir" "spiget" "$id" "${name:-$id}" \
+            "$external_url" "" "" "spiget-$id.jar" "$trust_requested"
+        return $?
     fi
 
     if [[ "$premium" == "true" ]]; then
