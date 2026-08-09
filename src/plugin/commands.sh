@@ -1,12 +1,21 @@
 # `add`/`remove` subcommand implementations for plugin.sh.
 #
 # Sourced (not exec'd) into plugin.sh's process. Each command parses its
-# own arguments, mutates jarlet.toml via store.sh's write_toml_file(), and
-# (for add) immediately routes the new entry via router.sh's
-# route_plugin(). May assume plugin.sh has already defined: fail(),
-# SCRIPT_DIR, and that store.sh and router.sh have already been sourced.
+# own arguments, resolves a bare user identifier to a concrete (source, id)
+# pair via resolve.sh, mutates jarlet.toml via store.sh's
+# write_toml_file(), and (for add) immediately routes the new entry via
+# router.sh's route_plugin(). May assume plugin.sh has already defined:
+# fail(), SCRIPT_DIR, and that store.sh, resolve.sh, and router.sh have
+# already been sourced.
 
-# `plugins.sh <name> add <source> <id> [--pin <version> | --channel <name>]`
+# `plugins.sh <name> add <identifier> [--pin <version> | --channel <name>] [--source <hangar|spiget|github-releases>]`
+#
+# `source` is no longer a positional argument -- it's inferred from
+# `identifier` by resolve.sh's resolve_add_identifier() (owner/repo ->
+# github-releases, numeric -> probe hangar/spiget, name -> hangar exact
+# slug then spiget exact-name search), unless --source is given as an
+# explicit escape hatch to skip inference entirely (still validated
+# against that source's expected id shape).
 #
 # Declares a new [[plugins]] entry in jarlet.toml (rewriting the whole file
 # via write_toml_file(), see that function and json_to_toml()'s doc comment
@@ -18,13 +27,13 @@ cmd_add() {
     local server_dir="$1" plugins_dir="$2" toml_file="$3" plugins_json="$4"
     shift 4
 
-    (( $# >= 2 )) ||
-        fail "Usage: plugins.sh <name> add <source> <id> [--pin <version> | --channel <name>]"
+    (( $# >= 1 )) ||
+        fail "Usage: plugins.sh <name> add <identifier> [--pin <version> | --channel <name>] [--source <hangar|spiget|github-releases>]"
 
-    local source="$1" id="$2"
-    shift 2
+    local identifier="$1"
+    shift
 
-    local pin="" channel=""
+    local pin="" channel="" source_override=""
     while (( $# > 0 )); do
         case "$1" in
             --pin)
@@ -37,6 +46,11 @@ cmd_add() {
                 channel="$2"
                 shift 2
                 ;;
+            --source)
+                (( $# >= 2 )) || fail "--source requires a value"
+                source_override="$2"
+                shift 2
+                ;;
             *)
                 fail "Unknown option '$1' for add"
                 ;;
@@ -46,16 +60,20 @@ cmd_add() {
     [[ -z "$pin" || -z "$channel" ]] ||
         fail "--pin and --channel are mutually exclusive"
 
-    local exists
-    exists="$(
-        jq \
-            --arg source "$source" \
-            --arg id "$id" \
-            '[(.plugins // [])[] | select(.source == $source and .id == $id)] | length' \
-            <<<"$plugins_json"
-    )"
-    (( exists == 0 )) ||
-        fail "'$id' ($source) is already declared in $toml_file; remove it first or edit the file directly"
+    local source id
+    if [[ -n "$source_override" ]]; then
+        resolve_validate_source_id_shape "$source_override" "$identifier"
+        source="$source_override"
+        id="$identifier"
+    else
+        resolve_add_identifier "$identifier"
+        source="$RESOLVED_SOURCE"
+        id="$RESOLVED_ID"
+
+        printf 'Resolved "%s" to %s (%s)\n' "$identifier" "$id" "$source"
+    fi
+
+    resolve_check_id_available "$plugins_json" "$id"
 
     # policy shape follows the documented { pin = "..." } / { track =
     # "channel", channel = "..." } forms (see jarlet.toml's example entry).
@@ -88,7 +106,12 @@ cmd_add() {
     route_plugin "$server_dir" "$plugins_dir" "$source" "$id" "$policy_json"
 }
 
-# `plugins.sh <name> remove <source> <id>`
+# `plugins.sh <name> remove <identifier>`
+#
+# `identifier` is resolved against the currently declared [[plugins]]
+# entries by id alone via resolve.sh's resolve_declared_identifier() --
+# `source` is no longer a positional argument, since ids are globally
+# unique per server (see resolve.sh's header comment).
 #
 # Full uninstall: drops the [[plugins]] entry from jarlet.toml (rewriting
 # the whole file, same tradeoff as add), deletes the installed jar from
@@ -97,21 +120,12 @@ cmd_remove() {
     local server_dir="$1" plugins_dir="$2" toml_file="$3" plugins_json="$4"
     shift 4
 
-    (( $# == 2 )) ||
-        fail "Usage: plugins.sh <name> remove <source> <id>"
+    (( $# == 1 )) ||
+        fail "Usage: plugins.sh <name> remove <identifier>"
 
-    local source="$1" id="$2"
-
-    local exists
-    exists="$(
-        jq \
-            --arg source "$source" \
-            --arg id "$id" \
-            '[(.plugins // [])[] | select(.source == $source and .id == $id)] | length' \
-            <<<"$plugins_json"
-    )"
-    (( exists > 0 )) ||
-        fail "No declared plugin with source '$source' and id '$id' in $toml_file"
+    local identifier="$1"
+    resolve_declared_identifier "$plugins_json" "$identifier" "remove"
+    local source="$RESOLVED_SOURCE" id="$RESOLVED_ID"
 
     local new_json
     new_json="$(

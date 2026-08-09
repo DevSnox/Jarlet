@@ -22,18 +22,27 @@ readonly JARLET_VERSION
 readonly USER_AGENT="${PROJECT_NAME}/${JARLET_VERSION} (${REPO_URL})"
 
 # store.sh: local persistence (plugins-state.json + jarlet.toml rewrites).
+# resolve.sh: resolves a bare CLI identifier to a concrete (source, id).
 # router.sh: picks/loads the source adapter for a declared entry.
+# redirect.sh: resolves a source's external-hosting gate to another adapter.
 # commands.sh: the add/remove subcommand implementations.
+# list.sh: the list subcommand implementation.
 # See each file's header comment for its exact contract.
 # shellcheck source=store.sh
 . "$SCRIPT_DIR/store.sh"
+# shellcheck source=resolve.sh
+. "$SCRIPT_DIR/resolve.sh"
 # shellcheck source=router.sh
 . "$SCRIPT_DIR/router.sh"
+# shellcheck source=redirect.sh
+. "$SCRIPT_DIR/redirect.sh"
 # shellcheck source=commands.sh
 . "$SCRIPT_DIR/commands.sh"
+# shellcheck source=list.sh
+. "$SCRIPT_DIR/list.sh"
 
 usage() {
-    printf 'Usage: %s <name> [add <source> <id> [--pin <version> | --channel <name>] | remove <source> <id> | update [<source> <id>]]\n' "$0" >&2
+    printf 'Usage: %s <name> [add <identifier> [--pin <version> | --channel <name>] [--source <hangar|spiget|github-releases>] | remove <identifier> | update [<identifier>] | list [--page <n> | --all]]\n' "$0" >&2
 }
 
 main() {
@@ -88,11 +97,15 @@ main() {
             shift
             if (( $# == 0 )); then
                 run_update_all "$server_dir" "$plugins_dir" "$plugins_json"
-            elif (( $# == 2 )); then
-                run_update_one "$plugins_json" "$server_dir" "$plugins_dir" "$1" "$2"
+            elif (( $# == 1 )); then
+                run_update_one "$plugins_json" "$server_dir" "$plugins_dir" "$1"
             else
-                fail "Usage: $0 <name> update [<source> <id>]"
+                fail "Usage: $0 <name> update [<identifier>]"
             fi
+            ;;
+        list)
+            shift
+            cmd_list "$server_dir" "$plugins_json" "$@"
             ;;
         "")
             # Backward-compatible default: bare `plugins.sh <name>` behaves
@@ -102,7 +115,7 @@ main() {
             ;;
         *)
             usage
-            fail "Unknown subcommand '$subcommand' (expected add, remove, or update)"
+            fail "Unknown subcommand '$subcommand' (expected add, remove, update, or list)"
             ;;
     esac
 }
