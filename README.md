@@ -30,9 +30,49 @@ port = 25565
 online_mode = true
 ```
 
+## Setup the jarlet command
+
+> It's planned to extend jarlet with a one command installer.
+
+Run these commands from the root of the Jarlet repository:
+
 ```bash
-cd src/server
-./start.sh <server-name> --accept-eula --foreground
+mkdir -p "$HOME/.local/bin"
+ln -sfn "$PWD/src/jarlet" "$HOME/.local/bin/jarlet"
+```
+
+Check which shell you use:
+
+```bash
+echo "$SHELL"
+```
+
+If the result ends with `/zsh`, run:
+
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.zshrc"
+source "$HOME/.zshrc"
+```
+
+If the result ends with `/bash`, run:
+
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
+source "$HOME/.bashrc"
+```
+
+Verify that Jarlet is available:
+
+```bash
+jarlet --version
+```
+
+This is a one-time setup and does not require `sudo`.
+
+Then, from any directory:
+
+```bash
+jarlet start <server-name> --accept-eula --foreground
 ```
 
 # Versioning
