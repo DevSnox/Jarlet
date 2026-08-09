@@ -2,20 +2,16 @@ package me.devsnox.jarlet.adapter.server
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import me.devsnox.jarlet.config.JarletVersion
+import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.config.SysConfig
+import me.devsnox.jarlet.http.SharedHttp
 import java.io.IOException
-import java.net.URI
-import java.net.http.HttpClient
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
-import java.security.MessageDigest
 
 /** Thrown for the same failure cases `fail()` covers throughout `src/adapter/server/paper.sh`. */
-class PaperAdapterException(message: String) : Exception(message)
+class PaperAdapterException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
 /**
  * Paper server-software adapter -- Kotlin port of `src/adapter/server/paper.sh`.
@@ -26,30 +22,18 @@ class PaperAdapterException(message: String) : Exception(message)
  * SHA-256 before installing it at the requested [Path] -- the same
  * validation sequence as `install_paper_server()`.
  *
- * Uses `java.net.http.HttpClient` (JDK built-in, no extra dependency) for
- * HTTP in place of `curl`, and `kotlinx.serialization` for JSON in place
- * of `jq` -- both per the migration plan's recommended defaults.
+ * HTTP GET, retried download (with truncated-transfer detection), and
+ * SHA-256 hashing all delegate to [SharedHttp] -- the same plumbing the
+ * plugin source adapters use -- rather than hand-rolling a second copy of
+ * that code here (this adapter used to; see [SharedHttp]'s doc comment for
+ * why it moved out of the plugin-only package it started in).
  */
 object PaperAdapter : ServerSoftwareAdapter {
     override val id: String = "paper"
 
-    private const val DOWNLOAD_RETRIES = 3
-
     private val VALID_VERSION = Regex("^[0-9A-Za-z._-]+$")
 
     private val json = Json { ignoreUnknownKeys = true }
-
-    private val httpClient: HttpClient by lazy {
-        HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NORMAL)
-            .build()
-    }
-
-    /** `PROJECT_NAME/<jarlet-version> (REPO_URL)` -- mirrors install.sh's `USER_AGENT`. */
-    private val userAgent: String by lazy {
-        val sysConfig = SysConfig.default()
-        "${sysConfig.value("PROJECT_NAME")}/${JarletVersion.VERSION} (${sysConfig.value("REPO_URL")})"
-    }
 
     private val paperApi: String by lazy { SysConfig.default().value("PAPER_API") }
 
@@ -77,16 +61,20 @@ object PaperAdapter : ServerSoftwareAdapter {
 
         val temporary = Files.createTempFile(targetDir, ".paper-download-", ".tmp")
         try {
-            println("Downloading Paper $minecraftVersion build ${build.id}")
+            Log.info("Downloading Paper $minecraftVersion build ${build.id}")
 
-            downloadTo(download.url, temporary)
+            try {
+                SharedHttp.download(download.url, temporary)
+            } catch (e: IOException) {
+                throw PaperAdapterException("Paper download failed: ${e.message}", cause = e)
+            }
 
             val actualSize = Files.size(temporary)
             if (actualSize != download.size) {
                 throw PaperAdapterException("Paper download has the wrong size")
             }
 
-            val actualHash = sha256Hex(temporary)
+            val actualHash = SharedHttp.sha256Hex(temporary)
             if (!actualHash.equals(download.checksums.sha256, ignoreCase = true)) {
                 throw PaperAdapterException("Paper SHA-256 verification failed")
             }
@@ -96,86 +84,60 @@ object PaperAdapter : ServerSoftwareAdapter {
             Files.deleteIfExists(temporary)
         }
 
-        println("Installed ${download.name} as $target")
-        println("SHA-256: ${download.checksums.sha256}")
+        Log.info("Installed ${download.name} as $target")
+        Log.info("SHA-256: ${download.checksums.sha256}")
     }
 
     private fun fetchProject(): PaperProjectResponse {
-        val body = get("$paperApi/projects/paper") ?: throw PaperAdapterException("Could not query Paper versions")
+        val body = get("$paperApi/projects/paper", "Could not query Paper versions")
         return try {
             json.decodeFromString(PaperProjectResponse.serializer(), body)
-        } catch (e: Exception) {
-            throw PaperAdapterException("Could not query Paper versions")
+        } catch (e: kotlinx.serialization.SerializationException) {
+            throw PaperAdapterException("Could not query Paper versions: malformed response", cause = e)
         }
     }
 
     private fun fetchBuilds(minecraftVersion: String): List<PaperBuild> {
-        val body = get("$paperApi/projects/paper/versions/$minecraftVersion/builds")
-            ?: throw PaperAdapterException("Could not query builds for Minecraft $minecraftVersion")
+        val body = get(
+            "$paperApi/projects/paper/versions/$minecraftVersion/builds",
+            "Could not query builds for Minecraft $minecraftVersion",
+        )
         return try {
             json.decodeFromString(kotlinx.serialization.builtins.ListSerializer(PaperBuild.serializer()), body)
-        } catch (e: Exception) {
-            throw PaperAdapterException("Could not query builds for Minecraft $minecraftVersion")
+        } catch (e: kotlinx.serialization.SerializationException) {
+            throw PaperAdapterException(
+                "Could not query builds for Minecraft $minecraftVersion: malformed response",
+                cause = e,
+            )
         }
     }
 
-    private fun get(url: String): String? {
-        val request = HttpRequest.newBuilder(URI.create(url))
-            .header("User-Agent", userAgent)
-            .GET()
-            .build()
-
+    /**
+     * Fetches [url] as text via [SharedHttp.get], folding every failure mode into a
+     * [PaperAdapterException] whose message is prefixed with [errorPrefix] but distinguishes
+     * *why* -- network error, a non-2xx status (with the code), or an empty body -- since
+     * callers previously couldn't tell these apart.
+     */
+    private fun get(url: String, errorPrefix: String): String {
         val response = try {
-            httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+            SharedHttp.get(url)
         } catch (e: IOException) {
-            return null
-        } catch (e: InterruptedException) {
-            Thread.currentThread().interrupt()
-            return null
+            throw PaperAdapterException("$errorPrefix: network error", cause = e)
         }
 
-        return if (response.statusCode() in 200..299) response.body() else null
-    }
-
-    /** Mirrors `curl --retry 3` around the actual jar download (only this step retries, matching install.sh). */
-    private fun downloadTo(url: String, target: Path) {
-        var lastError: Exception? = null
-
-        repeat(DOWNLOAD_RETRIES) {
-            try {
-                val request = HttpRequest.newBuilder(URI.create(url))
-                    .header("User-Agent", userAgent)
-                    .GET()
-                    .build()
-                val response = httpClient.send(request, HttpResponse.BodyHandlers.ofFile(target))
-                if (response.statusCode() !in 200..299) {
-                    throw IOException("HTTP ${response.statusCode()}")
-                }
-                return
-            } catch (e: Exception) {
-                lastError = e
-            }
+        if (response.status !in 200..299) {
+            throw PaperAdapterException("$errorPrefix: HTTP ${response.status}")
         }
 
-        throw PaperAdapterException("Paper download failed" + (lastError?.message?.let { ": $it" } ?: ""))
-    }
-
-    private fun sha256Hex(path: Path): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        Files.newInputStream(path).use { input ->
-            val buffer = ByteArray(8192)
-            while (true) {
-                val read = input.read(buffer)
-                if (read < 0) break
-                digest.update(buffer, 0, read)
-            }
+        if (response.body.isBlank()) {
+            throw PaperAdapterException("$errorPrefix: empty response")
         }
-        return digest.digest().joinToString("") { "%02x".format(it) }
+
+        return response.body
     }
 
     @Serializable
     private data class PaperProjectResponse(
-        val project: String? = null,
         val versions: Map<String, List<String>> = emptyMap(),
     )
 

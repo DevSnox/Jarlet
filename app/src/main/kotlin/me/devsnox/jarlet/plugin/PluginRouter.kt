@@ -1,6 +1,7 @@
 package me.devsnox.jarlet.plugin
 
 import java.nio.file.Path
+import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.config.JarletToml
 
 /** Thrown by [PluginRouter.routeOne] for the same failure cases `resolve_declared_identifier()`/`fail()` cover in the bash version. */
@@ -27,8 +28,8 @@ object PluginRouter {
      * source adapter via [AdapterRegistry]. Kotlin equivalent of
      * `route_plugin()`. If no adapter is registered for [source], mirrors
      * `route_plugin()`'s behavior exactly: prints a skip message via
-     * [echo] and returns normally (not an error -- an unregistered source
-     * in a declared entry is expected today, since no adapters are
+     * [Log.info] and returns normally (not an error -- an unregistered
+     * source in a declared entry is expected today, since no adapters are
      * implemented until phase 4).
      */
     fun route(
@@ -38,11 +39,10 @@ object PluginRouter {
         id: String,
         policy: JarletToml.Plugin.Policy,
         trustRequested: Boolean = false,
-        echo: (String) -> Unit = ::println,
     ) {
         val adapter = AdapterRegistry.find(source)
         if (adapter == null) {
-            echo("""Skipping "$id" ($source): no adapter is implemented for this source""")
+            Log.info("""Skipping "$id" ($source): no adapter is implemented for this source""")
             return
         }
 
@@ -61,15 +61,14 @@ object PluginRouter {
         pluginsDir: Path,
         declared: List<JarletToml.Plugin>,
         trustRequested: Boolean = false,
-        echo: (String) -> Unit = ::println,
     ) {
         if (declared.isEmpty()) {
-            echo("No plugins declared")
+            Log.info("No plugins declared")
             return
         }
 
         for (entry in declared) {
-            route(serverDir, pluginsDir, entry.source, entry.id, entry.policy, trustRequested, echo)
+            route(serverDir, pluginsDir, entry.source, entry.id, entry.policy, trustRequested)
         }
     }
 
@@ -90,9 +89,11 @@ object PluginRouter {
         declared: List<JarletToml.Plugin>,
         identifier: String,
         trustRequested: Boolean = false,
-        echo: (String) -> Unit = ::println,
     ) {
-        val matches = declared.filter { it.id == identifier }
+        // Case-insensitive to match resolveDeclaredIdentifier()'s
+        // behavior in SourceResolver -- a user typing `geyser` should
+        // still find a plugin declared as `Geyser`.
+        val matches = declared.filter { it.id.equals(identifier, ignoreCase = true) }
         val entry = when (matches.size) {
             0 -> throw PluginRouterException("No declared plugin with id '$identifier'")
             1 -> matches.single()
@@ -101,6 +102,6 @@ object PluginRouter {
             )
         }
 
-        route(serverDir, pluginsDir, entry.source, entry.id, entry.policy, trustRequested, echo)
+        route(serverDir, pluginsDir, entry.source, entry.id, entry.policy, trustRequested)
     }
 }

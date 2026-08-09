@@ -19,7 +19,7 @@ class SysConfigException(message: String) : Exception(message)
  * reading code is ported here.
  *
  * [default] loads the copy bundled with this build
- * (`app/src/main/resources/config/jarlet-sys.conf`, mirrored verbatim
+ * (`app/src/main/resources/jarlet-sys.conf`, mirrored verbatim
  * from `src/jarlet-sys.conf`) so callers don't need to know a real
  * filesystem location for what is, today, a fixed set of system-level
  * constants. [fromFile] remains available for an explicit path -- tests,
@@ -36,7 +36,7 @@ class SysConfig private constructor(
             ?: throw SysConfigException("Missing required key '$key' in $source")
 
     companion object {
-        private const val DEFAULT_RESOURCE_PATH = "/config/jarlet-sys.conf"
+        private const val DEFAULT_RESOURCE_PATH = "/jarlet-sys.conf"
 
         /** Loads the `jarlet-sys.conf` bundled with this build. */
         fun default(): SysConfig {

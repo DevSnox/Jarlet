@@ -53,7 +53,7 @@ data class JarletToml(
      * -- collapsed into one nullable-field data class, same as the
      * previous kotlinx.serialization-based model, since tomlj's inline
      * tables don't carry a fixed Kotlin type either and this shape is
-     * simplest for callers (see [me.devsnox.jarlet.plugin.ListCommand]).
+     * simplest for callers (see [me.devsnox.jarlet.command.ListCommand]).
      */
     data class Plugin(
         val source: String,

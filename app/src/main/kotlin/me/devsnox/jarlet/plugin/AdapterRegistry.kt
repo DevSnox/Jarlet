@@ -1,6 +1,6 @@
 package me.devsnox.jarlet.plugin
 
-import me.devsnox.jarlet.adapter.plugin.GithubReleasesAdapter
+import me.devsnox.jarlet.adapter.plugin.GithubAdapter
 import me.devsnox.jarlet.adapter.plugin.HangarAdapter
 import me.devsnox.jarlet.adapter.plugin.SpigetAdapter
 
@@ -16,13 +16,13 @@ import me.devsnox.jarlet.adapter.plugin.SpigetAdapter
  * keeping the bash contract's spirit (one adapter per source, sanity-
  * checked name -- here, simply "the map key").
  *
- * All three phase 4 adapters (`hangar`, `github-releases`, `spiget`, same
+ * All three phase 4 adapters (`hangar`, `github`, `spiget`, same
  * order they were built in bash) are now registered below.
  */
 object AdapterRegistry {
     private val adaptersBySource: Map<String, PluginSourceAdapter> = listOf(
         HangarAdapter,
-        GithubReleasesAdapter,
+        GithubAdapter,
         SpigetAdapter,
     ).associateBy { it.sourceName }
 
@@ -41,7 +41,7 @@ object AdapterRegistry {
     fun all(): Collection<PluginSourceAdapter> = adaptersBySource.values
 
     /**
-     * Cosmetic-only accessor used by [me.devsnox.jarlet.plugin.ListCommand]
+     * Cosmetic-only accessor used by [me.devsnox.jarlet.command.ListCommand]
      * to print a human-readable name instead of the raw internal source
      * string. Kotlin equivalent of `router.sh`'s `adapter_display_name()`
      * -- falls back to the raw [source] string itself if no adapter is

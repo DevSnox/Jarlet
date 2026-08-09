@@ -2,8 +2,10 @@ package me.devsnox.jarlet.plugin
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.config.JarletToml
 import me.devsnox.jarlet.config.SysConfig
+import me.devsnox.jarlet.http.SharedHttp
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
@@ -19,7 +21,7 @@ import java.nio.charset.StandardCharsets
  * for their integration status), this class has no dependency on the
  * per-source adapters at all -- same as `resolve.sh` itself, it only talks
  * to Hangar's/Spiget's existence-probe endpoints directly, via the shared
- * [PluginHttp] plumbing (also landed as part of the phase 3/4 work
+ * [SharedHttp] plumbing (also landed as part of the phase 3/4 work
  * happening in parallel with this one), never through an adapter -- so it
  * is implemented here in full rather than against an assumed interface,
  * even though the module mapping table in the migration plan groups it
@@ -42,13 +44,13 @@ object SourceResolver {
     /** True if the Hangar project slug/id exists (2xx). Kotlin equivalent of `resolve_probe_hangar_project()`. */
     private fun probeHangarProject(slugOrId: String): Boolean {
         val api = SysConfig.default().value("HANGAR_API")
-        return PluginHttp.statusOnly("$api/projects/$slugOrId") in 200..299
+        return SharedHttp.statusOnly("$api/projects/$slugOrId") in 200..299
     }
 
     /** True if the Spiget resource id exists (2xx). Kotlin equivalent of `resolve_probe_spiget_resource()`. */
     private fun probeSpigetResource(id: String): Boolean {
         val api = SysConfig.default().value("SPIGET_API")
-        return PluginHttp.statusOnly("$api/resources/$id") in 200..299
+        return SharedHttp.statusOnly("$api/resources/$id") in 200..299
     }
 
     /**
@@ -61,7 +63,7 @@ object SourceResolver {
         val encoded = URLEncoder.encode(name, StandardCharsets.UTF_8).replace("+", "%20")
 
         val response = try {
-            PluginHttp.get("$api/search/resources/$encoded?field=name")
+            SharedHttp.get("$api/search/resources/$encoded?field=name")
         } catch (e: Exception) {
             throw ResolutionException("Spiget search request failed for '$name': ${e.message}")
         }
@@ -78,14 +80,14 @@ object SourceResolver {
      * Resolves a bare `add <identifier>` (no `--source` override) to a
      * `(source, id)` pair. Kotlin equivalent of `resolve_add_identifier()`
      * -- see that function's doc comment for the exact algorithm
-     * (`owner/repo` -> github-releases; all-digits -> probe hangar then
+     * (`owner/repo` -> github; all-digits -> probe hangar then
      * spiget; otherwise -> hangar exact slug, else spiget exact-name
      * search requiring exactly one match). Throws [ResolutionException] on
      * no-match/ambiguous-match; never guesses.
      */
-    fun resolveAddIdentifier(identifier: String, warn: (String) -> Unit = {}): Resolved {
+    fun resolveAddIdentifier(identifier: String): Resolved {
         if (identifier.contains('/')) {
-            return Resolved("github-releases", identifier)
+            return Resolved("github", identifier)
         }
 
         if (identifier.all { it.isDigit() } && identifier.isNotEmpty()) {
@@ -94,8 +96,10 @@ object SourceResolver {
 
             return when {
                 hangarOk && spigetOk -> {
-                    warn(
-                        "Warning: \"$identifier\" exists as both a Hangar project id and a Spiget resource id; " +
+                    // "Warning: " stripped from the literal here -- Log.warn()
+                    // prepends its own, so keeping both would double it up.
+                    Log.warn(
+                        "\"$identifier\" exists as both a Hangar project id and a Spiget resource id; " +
                             "defaulting to hangar (pass --source spiget to force the other)",
                     )
                     Resolved("hangar", identifier)
@@ -109,6 +113,7 @@ object SourceResolver {
         if (probeHangarProject(identifier)) {
             return Resolved("hangar", identifier)
         }
+        Log.debug("tried hangar exact-slug match for '$identifier', not found; falling back to spiget exact-name search")
 
         val matches = spigetExactNameMatches(identifier)
         return when (matches.size) {
@@ -134,8 +139,8 @@ object SourceResolver {
         val ok = when (source) {
             "hangar" -> HANGAR_ID.matches(id)
             "spiget" -> SPIGET_ID.matches(id)
-            "github-releases" -> GITHUB_RELEASES_ID.matches(id)
-            else -> throw ResolutionException("Unknown --source '$source' (expected hangar, spiget, or github-releases)")
+            "github" -> GITHUB_ID.matches(id)
+            else -> throw ResolutionException("Unknown --source '$source' (expected hangar, spiget, or github)")
         }
         if (!ok) {
             val expectation = when (source) {
@@ -154,7 +159,7 @@ object SourceResolver {
      * already declared.
      */
     fun checkIdAvailable(toml: JarletToml, id: String) {
-        val existing = toml.plugins.firstOrNull { it.id == id } ?: return
+        val existing = toml.plugins.firstOrNull { it.id.equals(id, ignoreCase = true) } ?: return
         throw ResolutionException(
             "'$id' is already declared under source '${existing.source}'; remove it first if you want to redeclare it under a different source",
         )
@@ -170,7 +175,16 @@ object SourceResolver {
      * than once -- e.g. a hand-edited jarlet.toml).
      */
     fun resolveDeclaredIdentifier(toml: JarletToml, identifier: String, context: String): Resolved {
-        val matches = toml.plugins.filter { it.id == identifier }
+        // Case-insensitive: a user typing `geyser` should match a plugin
+        // declared as `Geyser` (e.g. matching Hangar's real project-slug
+        // casing) -- ids are otherwise opaque strings to the user, and
+        // there is no reason to make them retype the exact declared
+        // casing. If two ids ever differ only by case (only possible via
+        // a hand-edited jarlet.toml, since checkIdAvailable() prevents it
+        // at declare time), the existing multi-match branch below still
+        // reports that as the "declared under more than one source"
+        // consistency error rather than silently guessing.
+        val matches = toml.plugins.filter { it.id.equals(identifier, ignoreCase = true) }
 
         if (matches.isEmpty()) {
             throw ResolutionException("No declared plugin with id '$identifier' (for $context)")
@@ -181,10 +195,14 @@ object SourceResolver {
             )
         }
 
-        return Resolved(matches.single().source, identifier)
+        // Return the declared entry's own canonical-cased id (not the
+        // user's raw, possibly differently-cased, input) so downstream
+        // exact-match lookups (e.g. RemoveCommand's toml rewrite,
+        // PluginStateStore reads/writes) keep matching correctly.
+        return Resolved(matches.single().source, matches.single().id)
     }
 
     private val HANGAR_ID = Regex("^[0-9A-Za-z._-]+$")
     private val SPIGET_ID = Regex("^[0-9]+$")
-    private val GITHUB_RELEASES_ID = Regex("^[0-9A-Za-z._-]+/[0-9A-Za-z._-]+$")
+    private val GITHUB_ID = Regex("^[0-9A-Za-z._-]+/[0-9A-Za-z._-]+$")
 }

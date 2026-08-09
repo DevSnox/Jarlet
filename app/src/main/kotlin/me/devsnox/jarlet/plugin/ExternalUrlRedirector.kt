@@ -10,19 +10,19 @@ import java.nio.file.Path
  * reports `file.externalUrl:
  * https://github.com/EssentialsX/Essentials/releases/tag/2.22.0` (confirmed
  * live against api.spiget.org), a URL
- * [me.devsnox.jarlet.adapter.plugin.GithubReleasesAdapter] can actually
+ * [me.devsnox.jarlet.adapter.plugin.GithubAdapter] can actually
  * fetch from instead of the plugin just being skipped. Kotlin port of
  * `src/plugin/redirect.sh`.
  *
  * Discovery in the bash version is generic, not hardcoded to
- * github-releases: every adapter file is tried in turn, and only those that
+ * github: every adapter file is tried in turn, and only those that
  * set the optional `ADAPTER_URL_MATCHER` are asked whether they recognize
  * the URL. The equivalent generic mechanism here is [PluginUrlMatcher] --
  * any [PluginSourceAdapter] may additionally implement it. [matchers] is
  * derived from [AdapterRegistry] (every registered adapter that also
  * implements [PluginUrlMatcher]) rather than a hand-written list, so a
  * newly-registered adapter's matcher (if any -- only
- * [me.devsnox.jarlet.adapter.plugin.GithubReleasesAdapter]'s today) is
+ * [me.devsnox.jarlet.adapter.plugin.GithubAdapter]'s today) is
  * picked up automatically with no change needed here.
  */
 object ExternalUrlRedirector {

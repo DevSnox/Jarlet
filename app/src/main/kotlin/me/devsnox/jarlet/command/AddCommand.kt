@@ -5,20 +5,21 @@ import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
+import me.devsnox.jarlet.Log
+import me.devsnox.jarlet.command.lib.resolvePluginCommandContext
 import java.nio.file.Files
 import me.devsnox.jarlet.config.JarletToml
 import me.devsnox.jarlet.config.write
-import me.devsnox.jarlet.server.ServerCommandException
-import me.devsnox.jarlet.server.ServerPaths
-import me.devsnox.jarlet.server.serverCommandBody
+import me.devsnox.jarlet.command.lib.ServerCommandException
+import me.devsnox.jarlet.command.lib.serverCommandBody
 
 /**
- * `jarlet plugin add <name> <identifier> [--pin <version> | --channel <name>] [--source <hangar|spiget|github-releases>] [--trust]`
+ * `jarlet plugin add <name> <identifier> [--pin <version> | --channel <name>] [--source <hangar|spiget|github>] [--trust]`
  * -- Kotlin port of `src/plugin/commands.sh`'s `cmd_add()`.
  *
  * `source` is no longer a positional argument -- per the alpha.5 redesign
  * `commands.sh` documents, it's inferred from `identifier` by
- * [SourceResolver.resolveAddIdentifier] (`owner/repo` -> github-releases,
+ * [SourceResolver.resolveAddIdentifier] (`owner/repo` -> github,
  * numeric -> probe hangar/spiget, name -> hangar exact slug then spiget
  * exact-name search), unless `--source` is given as an explicit escape
  * hatch that skips inference entirely (still validated via
@@ -31,23 +32,9 @@ import me.devsnox.jarlet.server.serverCommandBody
  * -- matching `cmd_add()`'s documented "declare, then act" order exactly:
  * a failed fetch still leaves the plugin declared in `jarlet.toml`.
  *
- * ## Integration status
- *
- * Fully wired against what exists in this tree as of this port:
- * [SourceResolver] (HTTP-based Hangar/Spiget probing, no adapter
- * dependency), [JarletToml] (read/mutate/write -- its own `ktoml` vs.
- * `tomlj` backend churn resolved concurrently with this phase, so `add`'s
- * declare-then-fetch flow should genuinely round-trip `jarlet.toml`
- * today), and [PluginRouter.route] (phase 3, already landed).
- * [PluginRouter.route] itself is a real, working router -- but
- * [AdapterRegistry] has, as of this port, zero adapters registered
- * (`GithubReleasesAdapter` exists in the tree but isn't wired into
- * [AdapterRegistry]'s map yet; `HangarAdapter`/`SpigetAdapter` don't exist
- * yet at all), so today every `add` will declare successfully in
- * `jarlet.toml` and then print `Skipping "<id>" (<source>): no adapter is
- * implemented for this source` instead of actually fetching a jar --
- * exactly the router's documented, non-error behavior for an unregistered
- * source, not a bug in this command.
+ * Fully wired end-to-end: [SourceResolver], [JarletToml] (tomlj-backed
+ * read/mutate/write), and [PluginRouter.route] against [AdapterRegistry]'s
+ * three registered adapters (hangar, github, spiget).
  */
 class AddCommand : CliktCommand(name = "add") {
 
@@ -63,31 +50,21 @@ class AddCommand : CliktCommand(name = "add") {
     private val channel by option("--channel", help = "Track this release channel (default: Release).")
     private val sourceOverride by option(
         "--source",
-        help = "Skip source inference; must be one of hangar, spiget, github-releases.",
+        help = "Skip source inference; must be one of hangar, spiget, github.",
     )
     private val trust by option("--trust", help = "Proceed past an external-hosting gate this adapter can't otherwise resolve.")
         .flag(default = false)
+    private val resolveDependencies by option(
+        "--resolve-dependencies",
+        help = "Automatically resolve and add this plugin's plugin.yml \"depend\" entries that aren't already declared.",
+    ).flag(default = false)
 
     override fun run() = serverCommandBody {
         if (pin != null && channel != null) {
             throw ServerCommandException("--pin and --channel are mutually exclusive")
         }
 
-        val serverDir = ServerPaths.serverDir(name)
-        if (!Files.isDirectory(serverDir)) {
-            throw ServerCommandException("No server named '$name' found at $serverDir")
-        }
-
-        val tomlFile = serverDir.resolve(ServerPaths.templateFilename())
-        if (!Files.isRegularFile(tomlFile)) {
-            throw ServerCommandException("$tomlFile does not exist. Run setup (or start) for '$name' first to generate it.")
-        }
-
-        val toml = try {
-            JarletToml.read(tomlFile)
-        } catch (e: Exception) {
-            throw ServerCommandException("Could not parse $tomlFile as TOML: ${e.message}")
-        }
+        val (serverDir, tomlFile, toml) = resolvePluginCommandContext(name)
 
         val pluginsDir = serverDir.resolve("plugins")
         Files.createDirectories(pluginsDir)
@@ -96,8 +73,8 @@ class AddCommand : CliktCommand(name = "add") {
             SourceResolver.validateSourceIdShape(sourceOverride!!, identifier)
             sourceOverride!! to identifier
         } else {
-            val resolved = SourceResolver.resolveAddIdentifier(identifier, warn = { echo(it, err = true) })
-            echo("""Resolved "$identifier" to ${resolved.id} (${resolved.source})""")
+            val resolved = SourceResolver.resolveAddIdentifier(identifier)
+            Log.info("""Resolved "$identifier" to ${resolved.id} (${resolved.source})""")
             resolved.source to resolved.id
         }
 
@@ -114,10 +91,14 @@ class AddCommand : CliktCommand(name = "add") {
 
         val updatedToml = toml.copy(plugins = toml.plugins + JarletToml.Plugin(source = source, id = id, policy = policy))
 
-        echo("Note: this rewrites $tomlFile in full; hand-written comments and formatting are not preserved.")
+        Log.info("Note: this rewrites $tomlFile in full; hand-written comments and formatting are not preserved.")
         updatedToml.write(tomlFile)
-        echo("""Declared "$id" ($source) in $tomlFile""")
+        Log.info("""Declared "$id" ($source) in $tomlFile""")
 
-        PluginRouter.route(serverDir, pluginsDir, source, id, policy, trust, echo = { echo(it) })
+        PluginRouter.route(serverDir, pluginsDir, source, id, policy, trust)
+
+        PluginDependencyChecker.checkAndResolve(
+            serverDir, pluginsDir, tomlFile, updatedToml, source, id, resolveDependencies, trust,
+        )
     }
 }

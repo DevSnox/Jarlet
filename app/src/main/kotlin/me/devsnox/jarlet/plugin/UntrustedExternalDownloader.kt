@@ -1,5 +1,7 @@
 package me.devsnox.jarlet.plugin
 
+import me.devsnox.jarlet.Log
+import me.devsnox.jarlet.http.SharedHttp
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -53,20 +55,21 @@ object UntrustedExternalDownloader {
         channelName: String? = null,
     ) {
         val domain = TrustedSourceStore.domainOf(externalUrl)
+        Log.debug("resolved domain '$domain' for $externalUrl, trusted=${TrustedSourceStore.isTrusted(domain)}")
 
         when {
             TrustedSourceStore.isTrusted(domain) -> {
-                println("\"$label\" is hosted externally at $externalUrl -- domain \"$domain\" is trusted, downloading directly")
+                Log.info("\"$label\" is hosted externally at $externalUrl -- domain \"$domain\" is trusted, downloading directly")
             }
             trustRequested -> {
                 TrustedSourceStore.trust(domain)
-                println(
+                Log.info(
                     "\"$label\" is hosted externally at $externalUrl -- trusting domain \"$domain\" (saved to ${TrustedSourceStore.file()}) and downloading directly",
                 )
             }
             else -> {
-                println("Skipping \"$label\": hosted externally, install manually: $externalUrl")
-                println(
+                Log.info("Skipping \"$label\": hosted externally, install manually: $externalUrl")
+                Log.info(
                     "Or re-run this command with --trust to trust the \"$domain\" domain and download it directly (best-effort verification only -- see ${TrustedSourceStore.file()})",
                 )
                 return
@@ -75,10 +78,10 @@ object UntrustedExternalDownloader {
 
         val temporary = Files.createTempFile(pluginsDir, ".trust-download-", ".tmp")
         try {
-            println("Downloading $label from $externalUrl")
+            Log.info("Downloading $label from $externalUrl")
 
             val download = try {
-                PluginHttp.download(externalUrl, temporary)
+                SharedHttp.download(externalUrl, temporary)
             } catch (e: IOException) {
                 throw UntrustedExternalDownloadException("Download failed for '$label' from $externalUrl")
             }
@@ -92,24 +95,31 @@ object UntrustedExternalDownloader {
             when {
                 !expectedHash.isNullOrEmpty() -> {
                     // A real checksum was available despite the external hosting (see the param doc above) -- verify it for real, same as any adapter-hosted download.
-                    val actualHash = PluginHttp.sha256Hex(temporary)
+                    val actualHash = SharedHttp.sha256Hex(temporary)
                     if (!actualHash.equals(expectedHash, ignoreCase = true)) {
                         throw UntrustedExternalDownloadException(
                             "'$label' SHA-256 verification failed for external download from $externalUrl",
                         )
                     }
                     verifiedHash = expectedHash
-                    println("SHA-256 verified (checksum was available from $source despite external hosting): $verifiedHash")
+                    Log.info("SHA-256 verified (checksum was available from $source despite external hosting): $verifiedHash")
                 }
                 expectedSize != null && expectedSize > 0 -> {
                     if (download.size != expectedSize) {
-                        println(
+                        // Stays on stdout (Log.info, not Log.warn) -- this
+                        // was a plain println() before this migration, not
+                        // one routed to stderr, so Log.warn()'s stderr
+                        // stream would be a real behavior change here.
+                        // "Warning: " is kept as literal text (not
+                        // Log.warn()'s own prefix) for the same reason.
+                        Log.info(
                             "Warning: \"$label\" downloaded size (${download.size} bytes) does not match the expected size ($expectedSize bytes) -- no cryptographic checksum was available to verify further, proceeding anyway since this domain is trusted",
                         )
                     }
                 }
                 else -> {
-                    println(
+                    // See the comment above -- same stdout-preserving rationale.
+                    Log.info(
                         "Warning: no checksum or size is available to verify this trusted external download -- \"$label\" was fetched as-is from $externalUrl with no cryptographic verification",
                     )
                 }
@@ -131,12 +141,32 @@ object UntrustedExternalDownloader {
             // command's display showing a real (if generic) value instead of
             // misreporting an actually-installed trusted jar as "not
             // installed".
+            //
+            // When the caller left `versionName` at that generic default
+            // (Spiget's case), OR passed a value that is really just the
+            // adapter's own `id` echoed back rather than a genuine version
+            // (Hangar's live Geyser data: `/latest?channel=...` resolves to
+            // the literal label "Geyser", i.e. Hangar's channel-latest label
+            // for this project equals its own project id -- a known Hangar
+            // data quirk, not a real version identity), best-effort-check
+            // the jar's own bundled plugin.yml for a real version before
+            // falling back to whatever the caller passed. Never overrides a
+            // versionName that differs from both the generic literal and
+            // the id -- that's assumed to be a genuinely-resolved value
+            // (e.g. Hangar's `targetVersion` for any other project).
+            val versionNameIsGeneric = versionName == "external" || versionName.equals(id, ignoreCase = true)
+            val resolvedVersionName = if (versionNameIsGeneric) {
+                PluginYamlReader.read(target)?.version ?: versionName
+            } else {
+                versionName
+            }
+
             PluginStateStore.write(
                 serverDir,
                 InstalledVersion(
                     source = source,
                     id = id,
-                    versionName = versionName,
+                    versionName = resolvedVersionName,
                     versionId = null,
                     channelName = channelName,
                     sha256 = verifiedHash,
@@ -146,7 +176,7 @@ object UntrustedExternalDownloader {
                 ),
             )
 
-            println("Installed $label as $target (trusted external download, external=true)")
+            Log.info("Installed $label as $target (trusted external download, external=true)")
         } finally {
             Files.deleteIfExists(temporary)
         }

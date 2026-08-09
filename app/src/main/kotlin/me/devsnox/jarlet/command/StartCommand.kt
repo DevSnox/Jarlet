@@ -1,4 +1,4 @@
-package me.devsnox.jarlet.server
+package me.devsnox.jarlet.command
 
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.Context
@@ -7,8 +7,13 @@ import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.optional
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
+import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.adapter.server.ServerSoftwareAdapters
+import me.devsnox.jarlet.command.lib.ServerCommandException
+import me.devsnox.jarlet.command.lib.serverCommandBody
 import me.devsnox.jarlet.config.SysConfig
+import me.devsnox.jarlet.server.ServerPaths
+import me.devsnox.jarlet.server.ServerSetup
 import java.io.File
 import java.nio.file.Files
 
@@ -16,7 +21,7 @@ import java.nio.file.Files
  * `jarlet start <name> [template-file] [--foreground] [--accept-eula]` --
  * Kotlin port of `src/server/start.sh`.
  *
- * Sets the instance up first (via [ServerSetup.ensure]) if it doesn't
+ * Sets the instance up first (via [me.devsnox.jarlet.server.ServerSetup.ensure]) if it doesn't
  * already exist, same as `start.sh` shelling out to `setup.sh`. Foreground
  * mode approximates bash's `exec java ...` (which replaces the shell
  * process) by running the JVM child to completion and exiting this process
@@ -56,7 +61,7 @@ class StartCommand : CliktCommand(name = "start") {
 
         val eulaFile = serverDir.resolve("eula.txt")
         val eulaAccepted = Files.isRegularFile(eulaFile) &&
-            Files.readAllLines(eulaFile).any { it == "eula=true" }
+                Files.readAllLines(eulaFile).any { it == "eula=true" }
         if (!eulaAccepted) {
             if (!acceptEula) {
                 throw ServerCommandException(
@@ -87,7 +92,7 @@ class StartCommand : CliktCommand(name = "start") {
             Files.deleteIfExists(pidFile)
         }
 
-        echo("Starting Paper ${server.minecraftVersion} with ${server.memory} memory")
+        Log.info("Starting Paper ${server.minecraftVersion} with ${server.memory} memory")
 
         val command = listOf(
             "java",
@@ -128,14 +133,20 @@ class StartCommand : CliktCommand(name = "start") {
 
             val logFile = serverDir.resolve("logs/latest.log")
             if (Files.isRegularFile(logFile)) {
+                // Left as a direct CliktCommand.echo(..., err = true), not
+                // Log -- these are raw lines tailed from the crashed
+                // server's own log file, not a Jarlet-authored message, so
+                // none of Log's four functions (each either silent by
+                // default or prefix-adding) is a faithful fit without
+                // changing this output's actual content.
                 Files.readAllLines(logFile).takeLast(30).forEach { echo(it, err = true) }
             }
 
             throw ServerCommandException("Paper stopped during startup")
         }
 
-        echo("Server \"$name\" started with PID $serverPid")
-        echo("Logs: ${serverDir.resolve("logs/latest.log")}")
+        Log.info("Server \"$name\" started with PID $serverPid")
+        Log.info("Logs: ${serverDir.resolve("logs/latest.log")}")
     }
 
     private companion object {

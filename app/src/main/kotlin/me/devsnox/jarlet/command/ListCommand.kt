@@ -1,4 +1,4 @@
-package me.devsnox.jarlet.plugin
+package me.devsnox.jarlet.command
 
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.Context
@@ -8,13 +8,16 @@ import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.int
+import com.github.ajalt.mordant.table.ColumnWidth
 import com.github.ajalt.mordant.table.table
-import java.nio.file.Files
+import me.devsnox.jarlet.Log
+import me.devsnox.jarlet.command.lib.ServerCommandException
+import me.devsnox.jarlet.command.lib.resolvePluginCommandContext
+import me.devsnox.jarlet.command.lib.serverCommandBody
 import me.devsnox.jarlet.config.JarletToml
 import me.devsnox.jarlet.config.SysConfig
-import me.devsnox.jarlet.server.ServerCommandException
-import me.devsnox.jarlet.server.ServerPaths
-import me.devsnox.jarlet.server.serverCommandBody
+import me.devsnox.jarlet.plugin.AdapterRegistry
+import me.devsnox.jarlet.plugin.PluginStateStore
 
 /**
  * `jarlet plugin list <name> [--page <n> | --all]` -- Kotlin port of
@@ -22,20 +25,9 @@ import me.devsnox.jarlet.server.serverCommandBody
  *
  * Combines the DECLARED `[[plugins]]` entries from a server's
  * `jarlet.toml` ([JarletToml.plugins]) with the INSTALLED state recorded
- * in `plugins-state.json` ([PluginStateStore.readAll]) into one merged,
+ * in `plugins-state.json` ([me.devsnox.jarlet.plugin.PluginStateStore.readAll]) into one merged,
  * paginated view, rendered as a Mordant table instead of `list.sh`'s
  * plain `printf` lines.
- *
- * IMPORTANT: this command reads declared plugins via [JarletToml.read],
- * which -- as of this phase -- is in a known-broken state: it still
- * imports `com.akuleshov7.ktoml.Toml`, a dependency no longer declared in
- * `app/build.gradle.kts` (the project moved to `tomlj`/`snakeyaml-engine`
- * without updating that file). This command is written against
- * [JarletToml]'s stable data-class shape, not against whichever TOML
- * library backs [JarletToml.read] -- so the declared-plugins side of
- * `list` will not actually run until [JarletToml.read] is fixed to use a
- * real, declared dependency. See this phase's report for the full note;
- * fixing `JarletToml.kt` itself is out of this phase's scope.
  *
  * Unlike `plugin.sh`'s single dispatcher (which resolves the server
  * directory/toml file/plugins JSON once in `main()` and threads them into
@@ -63,45 +55,47 @@ class ListCommand : CliktCommand(name = "list") {
             throw ServerCommandException("--page must be a positive integer")
         }
 
-        // ServerPaths.serverDir() also validates `name` (the same
-        // ^[0-9A-Za-z._-]+$ rule list.sh's caller, plugin.sh's main(),
-        // applies) -- reused from the server-lifecycle phase rather than
-        // duplicated here, since it's shared, non-lifecycle-specific
-        // plumbing (server name/path resolution), not a lifecycle command
-        // itself.
-        val serverDir = ServerPaths.serverDir(name)
-        if (!Files.isDirectory(serverDir)) {
-            throw ServerCommandException("No server named '$name' found at $serverDir")
-        }
-
-        val tomlFile = serverDir.resolve(ServerPaths.templateFilename())
-        if (!Files.isRegularFile(tomlFile)) {
-            throw ServerCommandException("$tomlFile does not exist. Run setup (or start) for '$name' first to generate it.")
-        }
-
-        val declared = try {
-            JarletToml.read(tomlFile).plugins
-        } catch (e: Exception) {
-            throw ServerCommandException("Could not parse $tomlFile as TOML: ${e.message}")
-        }
+        val (serverDir, _, toml) = resolvePluginCommandContext(name)
+        val declared = toml.plugins
 
         val installed = PluginStateStore.readAll(serverDir)
 
         val merged = declared
             .map { d ->
-                val i = installed.firstOrNull { it.source == d.source && it.id == d.id }
+                // Case-insensitive id match: declared and installed-state
+                // ids should normally share the exact same casing (both
+                // come from the same adapter-resolved id at declare
+                // time), but matching loosely here avoids silently
+                // showing a plugin as "not installed" if that ever drifts.
+                val i = installed.firstOrNull { it.source == d.source && it.id.equals(d.id, ignoreCase = true) }
+                // Spiget's declared id is a bare numeric resource id (unlike
+                // Hangar/GitHub, whose id is already a readable
+                // slug/name) -- once the plugin has actually been
+                // installed/updated at least once, SpigetAdapter caches the
+                // real resource name in the installed-state record
+                // (i.displayName). Prefer that, keeping the id alongside for
+                // disambiguation/scripting, same as e.g. github's
+                // "owner/repo" id already provides. Declared-but-never-
+                // installed Spiget plugins have no state record yet, so
+                // they still fall back to the bare id here -- expected, not
+                // a bug (see PluginStateStore.InstalledVersion.displayName).
+                val idDisplay = i?.displayName?.let { "$it (${d.id})" } ?: d.id
                 MergedRow(
-                    id = d.id,
+                    id = idDisplay,
+                    sortId = d.id,
                     source = d.source,
                     sourceDisplay = AdapterRegistry.displayName(d.source),
                     versionName = i?.versionName,
                     policyDisplay = policyDisplay(d.policy),
                 )
             }
-            .sortedWith(compareBy({ it.source }, { it.id }))
+            // Sorted by the raw declared id (not the display string above)
+            // so caching a Spiget name doesn't reshuffle row order versus
+            // today's behavior.
+            .sortedWith(compareBy({ it.source }, { it.sortId }))
 
         if (merged.isEmpty()) {
-            echo("No plugins declared")
+            Log.info("No plugins declared")
             return@serverCommandBody
         }
 
@@ -126,6 +120,16 @@ class ListCommand : CliktCommand(name = "list") {
         }
 
         val rendered = table {
+            // Columns default to expanding proportionally to the detected
+            // terminal width; under GraalVM native-image (no real tty),
+            // that detection can come back as 0, collapsing every column
+            // to zero-width content while still drawing full borders. Auto
+            // sizes each column to its own content instead, independent of
+            // terminal-width detection.
+            column(0) { width = ColumnWidth.Auto }
+            column(1) { width = ColumnWidth.Auto }
+            column(2) { width = ColumnWidth.Auto }
+            column(3) { width = ColumnWidth.Auto }
             header {
                 row("ID", "Source", "Version", "Policy")
             }
@@ -142,12 +146,13 @@ class ListCommand : CliktCommand(name = "list") {
                 append("Page $page of $totalPages ($count plugin(s) total)")
                 if (page < totalPages) append(" -- use --page ${page + 1} for more")
             }
-            echo(footer)
+            Log.info(footer)
         }
     }
 
     private data class MergedRow(
         val id: String,
+        val sortId: String,
         val source: String,
         val sourceDisplay: String,
         val versionName: String?,

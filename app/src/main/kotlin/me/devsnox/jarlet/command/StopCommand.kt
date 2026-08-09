@@ -1,9 +1,13 @@
-package me.devsnox.jarlet.server
+package me.devsnox.jarlet.command
 
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.parameters.arguments.argument
+import me.devsnox.jarlet.Log
+import me.devsnox.jarlet.command.lib.ServerCommandException
+import me.devsnox.jarlet.command.lib.serverCommandBody
 import me.devsnox.jarlet.config.SysConfig
+import me.devsnox.jarlet.server.ServerPaths
 import java.nio.file.Files
 
 /**
@@ -12,7 +16,7 @@ import java.nio.file.Files
  * Unlike the bash version (which deliberately keeps its own inline
  * `fail()`/`config_value()`/`sys_config_value()`/`servers_root()` copies
  * rather than sourcing `lib.sh`, since it has no TOML-config dependency of
- * its own), this reuses [ServerPaths]/[SysConfig] directly -- there's no
+ * its own), this reuses [me.devsnox.jarlet.server.ServerPaths]/[SysConfig] directly -- there's no
  * equivalent reason to duplicate that logic in Kotlin.
  */
 class StopCommand : CliktCommand(name = "stop") {
@@ -50,7 +54,7 @@ class StopCommand : CliktCommand(name = "stop") {
             throw ServerCommandException("PID $serverPid does not appear to be the Paper server")
         }
 
-        echo("Stopping server \"$name\"...")
+        Log.info("Stopping server \"$name\"...")
         handle.destroy()
 
         val stopTimeoutSeconds = SysConfig.default().value("STOP_TIMEOUT_SECONDS").toIntOrNull()
@@ -60,7 +64,7 @@ class StopCommand : CliktCommand(name = "stop") {
         for (attempt in 1..stopTimeoutSeconds) {
             if (!handle.isAlive) {
                 Files.deleteIfExists(pidFile)
-                echo("Server stopped")
+                Log.info("Server stopped")
                 return@serverCommandBody
             }
             Thread.sleep(1000)
