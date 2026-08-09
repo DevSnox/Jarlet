@@ -36,12 +36,17 @@ graalvmNative {
             // reads its bundled file via getResourceAsStream at runtime, so
             // without this it would resolve fine on the JVM but be silently
             // missing from the native binary. jarlet.toml is registered
-            // alongside it for the same reason once something reads it as a
-            // bundled resource. Both files live flat under
-            // app/src/main/resources/, matched here by exact root filename.
+            // alongside it for the same reason. Both files live flat under
+            // app/src/main/resources/; resource-config.json patterns match
+            // the registered classpath resource NAME, which for a
+            // root-level resource has no leading slash (GraalVM's own
+            // examples match directory-relative paths like
+            // ".*/Resource0.txt$" -- a root file's name is just
+            // "jarlet.toml", never "/jarlet.toml"), so these patterns must
+            // not anchor one either.
             resources {
-                includedPatterns.add("^/jarlet-sys\\.conf$")
-                includedPatterns.add("^/${Regex.escape(templateFilename)}$")
+                includedPatterns.add("^jarlet-sys\\.conf$")
+                includedPatterns.add("^${Regex.escape(templateFilename)}$")
             }
         }
     }
