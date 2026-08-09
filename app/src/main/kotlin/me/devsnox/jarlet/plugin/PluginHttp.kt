@@ -120,10 +120,35 @@ object PluginHttp {
                 if (response.statusCode() !in 200..299) {
                     throw IOException("HTTP ${response.statusCode()}")
                 }
+
+                // BodyHandlers.ofFile() does not itself guarantee the file on
+                // disk actually holds every byte the server advertised -- a
+                // connection that closes early on a non-chunked HTTP/1.1
+                // response can leave `send()` returning normally (no
+                // exception) with a truncated file quietly written to
+                // [target] (observed live: Geyser's CDN response, once
+                // truncated this way, decodes its Content-Disposition
+                // filename correctly but the bytes on disk are a partial,
+                // invalid ZIP/jar). curl detects exactly this case itself
+                // (exit code 18, "transfer closed with outstanding read data
+                // remaining"), so mirror that here using the one signal
+                // available up front: a declared `Content-Length` that
+                // doesn't match what actually landed on disk means the
+                // transfer was cut short -- treat it as a failed attempt so
+                // the retry loop below gets a chance at a clean transfer
+                // instead of silently handing back partial bytes as if they
+                // were a complete download.
+                val actualSize = Files.size(target)
+                val declaredSize = response.headers().firstValue("Content-Length")
+                    .orElse(null)?.toLongOrNull()
+                if (declaredSize != null && actualSize != declaredSize) {
+                    throw IOException("Truncated download: got $actualSize bytes, expected $declaredSize")
+                }
+
                 val fileName = contentDispositionFileName(
                     response.headers().firstValue("Content-Disposition").orElse(null),
                 )
-                return Download(Files.size(target), fileName)
+                return Download(actualSize, fileName)
             } catch (e: Exception) {
                 lastError = e
             }
@@ -175,10 +200,16 @@ object PluginHttp {
      * `filename="=?UTF-8?Q?Geyser-Spigot.jar?="`, which without decoding
      * became the literal on-disk filename.
      */
-    private fun contentDispositionFileName(header: String?): String? {
+    internal fun contentDispositionFileName(header: String?): String? {
         if (header.isNullOrEmpty()) return null
 
-        val extended = Regex("""filename\*=([^"';]+)""", RegexOption.IGNORE_CASE).find(header)
+        // RFC 5987's filename*= value (charset'lang'value) is DELIMITED by
+        // single quotes, so the capture group must not exclude '\'' --
+        // excluding it (as an earlier version of this regex did) truncates
+        // "UTF-8''Geyser-Spigot.jar" down to just "UTF-8" at the first
+        // quote, which then fails decodeRfc5987()'s 3-part split and comes
+        // back out as the literal string "UTF-8" instead of a filename.
+        val extended = Regex("""filename\*=([^";]+)""", RegexOption.IGNORE_CASE).find(header)
         if (extended != null) {
             return decodeRfc5987(extended.groupValues[1].trim())
         }
