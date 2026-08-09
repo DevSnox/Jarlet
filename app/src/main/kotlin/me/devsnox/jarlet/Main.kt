@@ -7,6 +7,8 @@ import com.github.ajalt.clikt.core.context
 import com.github.ajalt.clikt.core.main
 import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.core.terminal
+import com.github.ajalt.clikt.parameters.options.flag
+import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.versionOption
 import com.github.ajalt.mordant.terminal.Terminal
 import me.devsnox.jarlet.config.JarletVersion
@@ -26,6 +28,9 @@ import me.devsnox.jarlet.command.StopCommand
  * -- `add`/`remove`/`update` are phase 5).
  */
 class Jarlet : CliktCommand(name = "jarlet") {
+
+    private val debug by option("--debug", help = "Print verbose diagnostic detail (HTTP calls, retries, timing).")
+        .flag(default = false)
 
     init {
         versionOption(JarletVersion.VERSION)
@@ -47,6 +52,8 @@ class Jarlet : CliktCommand(name = "jarlet") {
         "Manage Paper/Minecraft servers and their plugins."
 
     override fun run() {
+        if (debug) Log.enableDebug()
+
         // Bare `jarlet` with no subcommand previously did nothing and exited
         // 0. Print full help instead so the user gets useful instructions.
         if (currentContext.invokedSubcommand == null) {

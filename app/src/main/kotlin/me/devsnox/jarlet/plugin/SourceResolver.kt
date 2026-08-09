@@ -2,8 +2,10 @@ package me.devsnox.jarlet.plugin
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.config.JarletToml
 import me.devsnox.jarlet.config.SysConfig
+import me.devsnox.jarlet.http.SharedHttp
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
@@ -19,7 +21,7 @@ import java.nio.charset.StandardCharsets
  * for their integration status), this class has no dependency on the
  * per-source adapters at all -- same as `resolve.sh` itself, it only talks
  * to Hangar's/Spiget's existence-probe endpoints directly, via the shared
- * [PluginHttp] plumbing (also landed as part of the phase 3/4 work
+ * [SharedHttp] plumbing (also landed as part of the phase 3/4 work
  * happening in parallel with this one), never through an adapter -- so it
  * is implemented here in full rather than against an assumed interface,
  * even though the module mapping table in the migration plan groups it
@@ -42,13 +44,13 @@ object SourceResolver {
     /** True if the Hangar project slug/id exists (2xx). Kotlin equivalent of `resolve_probe_hangar_project()`. */
     private fun probeHangarProject(slugOrId: String): Boolean {
         val api = SysConfig.default().value("HANGAR_API")
-        return PluginHttp.statusOnly("$api/projects/$slugOrId") in 200..299
+        return SharedHttp.statusOnly("$api/projects/$slugOrId") in 200..299
     }
 
     /** True if the Spiget resource id exists (2xx). Kotlin equivalent of `resolve_probe_spiget_resource()`. */
     private fun probeSpigetResource(id: String): Boolean {
         val api = SysConfig.default().value("SPIGET_API")
-        return PluginHttp.statusOnly("$api/resources/$id") in 200..299
+        return SharedHttp.statusOnly("$api/resources/$id") in 200..299
     }
 
     /**
@@ -61,7 +63,7 @@ object SourceResolver {
         val encoded = URLEncoder.encode(name, StandardCharsets.UTF_8).replace("+", "%20")
 
         val response = try {
-            PluginHttp.get("$api/search/resources/$encoded?field=name")
+            SharedHttp.get("$api/search/resources/$encoded?field=name")
         } catch (e: Exception) {
             throw ResolutionException("Spiget search request failed for '$name': ${e.message}")
         }
@@ -83,7 +85,7 @@ object SourceResolver {
      * search requiring exactly one match). Throws [ResolutionException] on
      * no-match/ambiguous-match; never guesses.
      */
-    fun resolveAddIdentifier(identifier: String, warn: (String) -> Unit = {}): Resolved {
+    fun resolveAddIdentifier(identifier: String): Resolved {
         if (identifier.contains('/')) {
             return Resolved("github-releases", identifier)
         }
@@ -94,8 +96,10 @@ object SourceResolver {
 
             return when {
                 hangarOk && spigetOk -> {
-                    warn(
-                        "Warning: \"$identifier\" exists as both a Hangar project id and a Spiget resource id; " +
+                    // "Warning: " stripped from the literal here -- Log.warn()
+                    // prepends its own, so keeping both would double it up.
+                    Log.warn(
+                        "\"$identifier\" exists as both a Hangar project id and a Spiget resource id; " +
                             "defaulting to hangar (pass --source spiget to force the other)",
                     )
                     Resolved("hangar", identifier)
@@ -109,6 +113,7 @@ object SourceResolver {
         if (probeHangarProject(identifier)) {
             return Resolved("hangar", identifier)
         }
+        Log.debug("tried hangar exact-slug match for '$identifier', not found; falling back to spiget exact-name search")
 
         val matches = spigetExactNameMatches(identifier)
         return when (matches.size) {

@@ -1,5 +1,6 @@
 package me.devsnox.jarlet.plugin
 
+import me.devsnox.jarlet.Log
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -53,20 +54,21 @@ object UntrustedExternalDownloader {
         channelName: String? = null,
     ) {
         val domain = TrustedSourceStore.domainOf(externalUrl)
+        Log.debug("resolved domain '$domain' for $externalUrl, trusted=${TrustedSourceStore.isTrusted(domain)}")
 
         when {
             TrustedSourceStore.isTrusted(domain) -> {
-                println("\"$label\" is hosted externally at $externalUrl -- domain \"$domain\" is trusted, downloading directly")
+                Log.info("\"$label\" is hosted externally at $externalUrl -- domain \"$domain\" is trusted, downloading directly")
             }
             trustRequested -> {
                 TrustedSourceStore.trust(domain)
-                println(
+                Log.info(
                     "\"$label\" is hosted externally at $externalUrl -- trusting domain \"$domain\" (saved to ${TrustedSourceStore.file()}) and downloading directly",
                 )
             }
             else -> {
-                println("Skipping \"$label\": hosted externally, install manually: $externalUrl")
-                println(
+                Log.info("Skipping \"$label\": hosted externally, install manually: $externalUrl")
+                Log.info(
                     "Or re-run this command with --trust to trust the \"$domain\" domain and download it directly (best-effort verification only -- see ${TrustedSourceStore.file()})",
                 )
                 return
@@ -75,7 +77,7 @@ object UntrustedExternalDownloader {
 
         val temporary = Files.createTempFile(pluginsDir, ".trust-download-", ".tmp")
         try {
-            println("Downloading $label from $externalUrl")
+            Log.info("Downloading $label from $externalUrl")
 
             val download = try {
                 PluginHttp.download(externalUrl, temporary)
@@ -99,17 +101,24 @@ object UntrustedExternalDownloader {
                         )
                     }
                     verifiedHash = expectedHash
-                    println("SHA-256 verified (checksum was available from $source despite external hosting): $verifiedHash")
+                    Log.info("SHA-256 verified (checksum was available from $source despite external hosting): $verifiedHash")
                 }
                 expectedSize != null && expectedSize > 0 -> {
                     if (download.size != expectedSize) {
-                        println(
+                        // Stays on stdout (Log.info, not Log.warn) -- this
+                        // was a plain println() before this migration, not
+                        // one routed to stderr, so Log.warn()'s stderr
+                        // stream would be a real behavior change here.
+                        // "Warning: " is kept as literal text (not
+                        // Log.warn()'s own prefix) for the same reason.
+                        Log.info(
                             "Warning: \"$label\" downloaded size (${download.size} bytes) does not match the expected size ($expectedSize bytes) -- no cryptographic checksum was available to verify further, proceeding anyway since this domain is trusted",
                         )
                     }
                 }
                 else -> {
-                    println(
+                    // See the comment above -- same stdout-preserving rationale.
+                    Log.info(
                         "Warning: no checksum or size is available to verify this trusted external download -- \"$label\" was fetched as-is from $externalUrl with no cryptographic verification",
                     )
                 }
@@ -166,7 +175,7 @@ object UntrustedExternalDownloader {
                 ),
             )
 
-            println("Installed $label as $target (trusted external download, external=true)")
+            Log.info("Installed $label as $target (trusted external download, external=true)")
         } finally {
             Files.deleteIfExists(temporary)
         }

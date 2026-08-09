@@ -1,6 +1,7 @@
 package me.devsnox.jarlet.plugin
 
 import java.nio.file.Path
+import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.config.JarletToml
 import me.devsnox.jarlet.config.write
 
@@ -54,7 +55,6 @@ object PluginDependencyChecker {
         id: String,
         resolveDependencies: Boolean,
         trustRequested: Boolean,
-        echo: (String) -> Unit = ::println,
     ): JarletToml {
         val installed = PluginStateStore.read(serverDir, source, id) ?: return toml
         val info = PluginYamlReader.read(pluginsDir.resolve(installed.file)) ?: return toml
@@ -67,10 +67,14 @@ object PluginDependencyChecker {
 
         for (dep in missingHard) {
             val suffix = if (resolveDependencies) "" else " (pass --resolve-dependencies to install it automatically)"
-            echo("""Warning: required dependency "$dep" of "$id" is not declared for this server; "$id" will fail to load without it$suffix""")
+            // Log.info, not Log.warn: this was plain (stdout, non-err)
+            // echo() before this migration, so the "Warning: " text is
+            // kept literal here rather than routed through Log.warn()'s
+            // own stderr-bound prefix, which would change the stream.
+            Log.info("""Warning: required dependency "$dep" of "$id" is not declared for this server; "$id" will fail to load without it$suffix""")
         }
         for (dep in missingSoft) {
-            echo("""Note: optional dependency "$dep" of "$id" is not declared for this server; "$id" will still load, but functionality relying on "$dep" may be unavailable""")
+            Log.info("""Note: optional dependency "$dep" of "$id" is not declared for this server; "$id" will still load, but functionality relying on "$dep" may be unavailable""")
         }
 
         if (!resolveDependencies) return currentToml
@@ -79,7 +83,7 @@ object PluginDependencyChecker {
             if (isDeclared(dep)) continue // may have been declared by an earlier iteration, e.g. two deps resolving to the same id
 
             try {
-                val resolved = SourceResolver.resolveAddIdentifier(dep, warn = echo)
+                val resolved = SourceResolver.resolveAddIdentifier(dep)
                 SourceResolver.checkIdAvailable(currentToml, resolved.id)
 
                 val policy = JarletToml.Plugin.Policy(track = "channel", channel = "Release")
@@ -87,11 +91,11 @@ object PluginDependencyChecker {
                     plugins = currentToml.plugins + JarletToml.Plugin(source = resolved.source, id = resolved.id, policy = policy),
                 )
                 currentToml.write(tomlFile)
-                echo("""Declared "${resolved.id}" (${resolved.source}) in $tomlFile as a dependency of "$id"""")
+                Log.info("""Declared "${resolved.id}" (${resolved.source}) in $tomlFile as a dependency of "$id"""")
 
-                PluginRouter.route(serverDir, pluginsDir, resolved.source, resolved.id, policy, trustRequested, echo)
+                PluginRouter.route(serverDir, pluginsDir, resolved.source, resolved.id, policy, trustRequested)
             } catch (e: Exception) {
-                echo("""Failed to resolve/install dependency "$dep" of "$id": ${e.message}""")
+                Log.info("""Failed to resolve/install dependency "$dep" of "$id": ${e.message}""")
             }
         }
 
