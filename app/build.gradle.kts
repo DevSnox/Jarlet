@@ -112,8 +112,15 @@ sourceSets {
     // its own source set + Test task (below) so plain `./gradlew test`
     // (and `gradle build`, which depends on `test`) never touches the
     // network; run these explicitly via `./gradlew integrationTest`.
+    //
+    // Sources live under src/main/test/kotlin/integrationTest/ rather than a
+    // top-level src/integrationTest/ so they travel alongside the main
+    // sourceSet in tooling/IDE views instead of looking like a second,
+    // sibling module -- "integrationTest" here is just a path segment under
+    // kotlin.srcDir, not a package; Kotlin resolves classes by the package
+    // declarations beneath it (me.devsnox.jarlet.adapter.*), same as always.
     create("integrationTest") {
-        kotlin.srcDir("src/integrationTest/kotlin")
+        kotlin.srcDir("src/main/test/kotlin/integrationTest")
         compileClasspath += sourceSets.main.get().output
         runtimeClasspath += sourceSets.main.get().output
     }
