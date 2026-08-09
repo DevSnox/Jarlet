@@ -22,18 +22,31 @@ readonly JARLET_VERSION
 readonly USER_AGENT="${PROJECT_NAME}/${JARLET_VERSION} (${REPO_URL})"
 
 # store.sh: local persistence (plugins-state.json + jarlet.toml rewrites).
+# resolve.sh: resolves a bare CLI identifier to a concrete (source, id).
 # router.sh: picks/loads the source adapter for a declared entry.
+# redirect.sh: resolves a source's external-hosting gate to another adapter.
+# trust.sh: the --trust fallback for external URLs redirect.sh can't
+#   resolve to a known adapter (see its header for the full mechanism).
 # commands.sh: the add/remove subcommand implementations.
+# list.sh: the list subcommand implementation.
 # See each file's header comment for its exact contract.
 # shellcheck source=store.sh
 . "$SCRIPT_DIR/store.sh"
+# shellcheck source=resolve.sh
+. "$SCRIPT_DIR/resolve.sh"
 # shellcheck source=router.sh
 . "$SCRIPT_DIR/router.sh"
+# shellcheck source=redirect.sh
+. "$SCRIPT_DIR/redirect.sh"
+# shellcheck source=trust.sh
+. "$SCRIPT_DIR/trust.sh"
 # shellcheck source=commands.sh
 . "$SCRIPT_DIR/commands.sh"
+# shellcheck source=list.sh
+. "$SCRIPT_DIR/list.sh"
 
 usage() {
-    printf 'Usage: %s <name> [add <source> <id> [--pin <version> | --channel <name>] | remove <source> <id> | update [<source> <id>]]\n' "$0" >&2
+    printf 'Usage: %s <name> [add <identifier> [--pin <version> | --channel <name>] [--source <hangar|spiget|github-releases>] [--trust] | remove <identifier> | update [<identifier>] [--trust] | list [--page <n> | --all]]\n' "$0" >&2
 }
 
 main() {
@@ -86,23 +99,46 @@ main() {
             ;;
         update)
             shift
-            if (( $# == 0 )); then
-                run_update_all "$server_dir" "$plugins_dir" "$plugins_json"
-            elif (( $# == 2 )); then
-                run_update_one "$plugins_json" "$server_dir" "$plugins_dir" "$1" "$2"
+            # --trust may appear anywhere alongside an optional identifier
+            # (mirrors start.sh's --accept-eula: an explicit opt-in flag on
+            # the same command, not a separate subcommand -- see trust.sh's
+            # header for the full mechanism).
+            local trust_requested=false
+            local identifier=""
+            while (( $# > 0 )); do
+                case "$1" in
+                    --trust)
+                        trust_requested=true
+                        shift
+                        ;;
+                    *)
+                        [[ -z "$identifier" ]] ||
+                            fail "Usage: $0 <name> update [<identifier>] [--trust]"
+                        identifier="$1"
+                        shift
+                        ;;
+                esac
+            done
+
+            if [[ -z "$identifier" ]]; then
+                run_update_all "$server_dir" "$plugins_dir" "$plugins_json" "$trust_requested"
             else
-                fail "Usage: $0 <name> update [<source> <id>]"
+                run_update_one "$plugins_json" "$server_dir" "$plugins_dir" "$identifier" "$trust_requested"
             fi
+            ;;
+        list)
+            shift
+            cmd_list "$server_dir" "$plugins_json" "$@"
             ;;
         "")
             # Backward-compatible default: bare `plugins.sh <name>` behaves
             # exactly like `plugins.sh <name> update` with no target --
             # process every declared plugin.
-            run_update_all "$server_dir" "$plugins_dir" "$plugins_json"
+            run_update_all "$server_dir" "$plugins_dir" "$plugins_json" "false"
             ;;
         *)
             usage
-            fail "Unknown subcommand '$subcommand' (expected add, remove, or update)"
+            fail "Unknown subcommand '$subcommand' (expected add, remove, update, or list)"
             ;;
     esac
 }

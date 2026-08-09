@@ -1,0 +1,362 @@
+# GitHub Releases plugin source adapter.
+#
+# Sourced (not exec'd) into plugins.sh's process by router.sh's
+# route_plugin(), lazily and only once, the first time a declared plugin
+# entry has source = "github-releases" -- whether that routing came from
+# the update-all loop, a targeted `update <source> <id>`, or add's
+# immediate post-declare fetch. See ../plugin/hangar.sh's header for the
+# full adapter contract this file follows; not repeated in full here.
+#
+# Unlike Spiget/Hangar, GitHub has no discovery layer and no channel
+# concept -- see prototyping/documentation/sources/github-releases-plugin-fetching.md
+# for the full research this adapter implements. Summary relevant to this
+# file:
+#   - id is "owner/repo" (e.g. "ViaVersion/ViaVersion"), not a searchable
+#     slug/resource id -- the caller must already know it.
+#   - policy is { pin = "<tag_name>" } or { track = "latest" } (no
+#     "channel" field -- GitHub's own /releases/latest already excludes
+#     prereleases/drafts).
+#   - A release's assets array has no "this is the plugin jar" field, so
+#     asset selection is a deterministic filter (content-type + name-
+#     pattern exclusion, see github_releases_pick_asset() below). If more
+#     than one candidate survives -- e.g. a core plugin plus optional addon
+#     jars in the same release, as with EssentialsX's 2.22.0 release -- the
+#     candidate with the highest value of the configured tie-break field
+#     (GITHUB_ASSET_TIEBREAK_FIELD in jarlet-sys.conf, default
+#     "download_count") is picked automatically, on the assumption that the
+#     most-downloaded jar is the main/core artifact; no prompting, no
+#     persisted choice. This adapter only skips with a message when zero
+#     candidates survive the filter at all.
+#   - GitHub's per-asset `digest` (sha256:...) is verified when present;
+#     falls back to size-only verification (with a printed warning) when
+#     absent, same "best available verification" precedent as hangar.sh.
+
+command -v curl >/dev/null || fail "curl is required for the github-releases source"
+command -v shasum >/dev/null || fail "shasum is required for the github-releases source"
+
+readonly GITHUB_API="$(sys_config_value GITHUB_API)"
+readonly GITHUB_ASSET_TIEBREAK_FIELD="$(sys_config_value GITHUB_ASSET_TIEBREAK_FIELD)"
+
+# GET against $GITHUB_API$path, returning the response body. Sends an
+# Authorization header only if JARLET_GITHUB_TOKEN is set in the
+# environment (raises the unauthenticated 60 req/hr limit to 5000 req/hr
+# when supplied) -- never written to disk, process/env-scoped only, same
+# treatment hangar.sh gives its JWT.
+github_releases_get() {
+    local path="$1"
+    local raw status body
+
+    if [[ -n "${JARLET_GITHUB_TOKEN:-}" ]]; then
+        raw="$(
+            curl \
+                --silent \
+                --show-error \
+                --location \
+                --header "User-Agent: $USER_AGENT" \
+                --header "Authorization: Bearer $JARLET_GITHUB_TOKEN" \
+                --header "Accept: application/vnd.github+json" \
+                --write-out '\n%{http_code}' \
+                "$GITHUB_API$path"
+        )" || fail "GitHub request failed: $path"
+    else
+        raw="$(
+            curl \
+                --silent \
+                --show-error \
+                --location \
+                --header "User-Agent: $USER_AGENT" \
+                --header "Accept: application/vnd.github+json" \
+                --write-out '\n%{http_code}' \
+                "$GITHUB_API$path"
+        )" || fail "GitHub request failed: $path"
+    fi
+
+    status="${raw##*$'\n'}"
+    body="${raw%$'\n'*}"
+
+    printf '%s\n%s' "$status" "$body"
+}
+
+# Given a release's assets array (as JSON), applies the deterministic
+# jar-selection filter: prefer plugin-jar-shaped content types, exclude
+# known non-plugin name patterns (sources/javadoc jars, checksum/signature
+# files, changelogs/text files). If exactly one candidate survives, that's
+# the pick. If more than one survives (e.g. a core plugin plus optional
+# addon jars in the same release, as with EssentialsX), picks the one with
+# the highest value of the GITHUB_ASSET_TIEBREAK_FIELD asset field
+# (jarlet-sys.conf, default "download_count" -- GitHub's per-asset
+# popularity counter) as a deterministic tie-break, on the assumption that
+# the most-downloaded jar is the main/core artifact.
+#
+# Prints a single JSON object on stdout: {"count": <n>, "asset": <picked
+# asset object, or null if n is 0>} -- both the candidate count and the
+# picked asset travel back to the caller through this one stdout stream.
+# Always returns 0; the caller distinguishes "no usable asset found" by
+# checking whether .count == 0 (equivalently .asset == null), not by exit
+# status. (Deliberately NOT a side-channel global set alongside a captured
+# stdout value: this function's result is captured via "$(...)", which
+# forks a subshell, so any plain variable assignment made inside it -- e.g.
+# a bare GITHUB_ASSET_CANDIDATE_COUNT=... -- would be discarded when the
+# subshell exits and would never reach the caller's environment. Route ALL
+# return data through stdout instead.)
+github_releases_pick_asset() {
+    local assets_json="$1"
+    local candidates
+
+    candidates="$(
+        jq -c '
+            [
+                .[]
+                | select(
+                    (.content_type == "application/java-archive")
+                    or (.content_type == "application/zip")
+                    or (.content_type == "application/octet-stream")
+                )
+                | select(
+                    (.name | test("-sources\\.jar$"; "i")) or
+                    (.name | test("-javadoc\\.jar$"; "i")) or
+                    (.name | test("\\.sha256$"; "i")) or
+                    (.name | test("\\.asc$"; "i")) or
+                    (.name | test("^changelog"; "i")) or
+                    (.name | test("\\.txt$"; "i"))
+                    | not
+                )
+            ]
+        ' <<<"$assets_json"
+    )"
+
+    jq -c --arg field "$GITHUB_ASSET_TIEBREAK_FIELD" \
+        '{count: length, asset: (max_by(.[$field]) // null)}' \
+        <<<"$candidates"
+}
+
+# Recognizes GitHub repo/release URLs -- the ADAPTER_URL_MATCHER this
+# adapter declares (see router.sh's header and redirect.sh for the generic
+# mechanism this plugs into), used when another source's external-hosting
+# gate (spiget.sh, hangar.sh) finds an externalUrl pointing here instead of
+# just skipping. Confirmed live: Spiget's EssentialsX resource (id 9089)
+# reports `file.externalUrl:
+# https://github.com/EssentialsX/Essentials/releases/tag/2.22.0`. Hangar's
+# Plan-Player-Analytics resource reports `externalUrl:
+# https://github.com/plan-player-analytics/Plan/releases/download/5.8.3579/Plan-5.8-build-3579.jar`
+# -- a direct asset-download URL rather than a release-page URL; this is
+# GitHub's standard, stable asset URL shape (confirmed live against
+# ViaVersion's, EssentialsX's, and Plan's actual releases via the GitHub
+# API's `browser_download_url` field), so it gets its own branch below.
+#
+# Recognizes, with or without a trailing slash, http:// or https://
+# (www.github.com is never used by GitHub itself, so not matched):
+#   github.com/{owner}/{repo}
+#   github.com/{owner}/{repo}/releases/tag/{tag}
+#   github.com/{owner}/{repo}/releases/download/{tag}/{asset-filename}
+#
+# On a match, sets MATCHED_ID="{owner}/{repo}" and MATCHED_POLICY_JSON to
+# {"pin": "{tag}"} for a .../releases/tag/{tag} or .../releases/download/
+# {tag}/{asset} URL (an explicit version was named either way -- the asset
+# filename itself is not parsed or trusted; process_github_releases_plugin()
+# re-fetches the release by tag and re-runs its own asset selection), or {}
+# (track latest -- process_github_releases_plugin() only ever reads .pin
+# from policy_json, so an empty object already means "latest") otherwise,
+# and returns 0. Returns 1 (clearing both) on no match.
+#
+# Like the /releases/tag/{tag} branch, {tag} is matched with
+# [^/[:space:]]+ and so does not handle a git tag name that itself contains
+# a literal "/" (git allows this, e.g. "v1/2.0") -- not observed in any
+# real plugin release checked so far (ViaVersion, EssentialsX, Plan all use
+# plain dotted version tags), and pre-existing behavior for the release-tag
+# branch, not a regression introduced here.
+github_releases_match_url() {
+    local url="$1"
+    MATCHED_ID="" MATCHED_POLICY_JSON=""
+
+    if [[ "$url" =~ ^https?://github\.com/([0-9A-Za-z._-]+)/([0-9A-Za-z._-]+)/releases/tag/([^/[:space:]]+)/?$ ]]; then
+        MATCHED_ID="${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+        MATCHED_POLICY_JSON="$(jq -n --arg pin "${BASH_REMATCH[3]}" '{pin: $pin}')"
+        return 0
+    fi
+
+    if [[ "$url" =~ ^https?://github\.com/([0-9A-Za-z._-]+)/([0-9A-Za-z._-]+)/releases/download/([^/[:space:]]+)/([^/[:space:]]+)/?$ ]]; then
+        MATCHED_ID="${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+        MATCHED_POLICY_JSON="$(jq -n --arg pin "${BASH_REMATCH[3]}" '{pin: $pin}')"
+        return 0
+    fi
+
+    if [[ "$url" =~ ^https?://github\.com/([0-9A-Za-z._-]+)/([0-9A-Za-z._-]+)/?$ ]]; then
+        MATCHED_ID="${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+        MATCHED_POLICY_JSON='{}'
+        return 0
+    fi
+
+    return 1
+}
+
+process_github_releases_plugin() {
+    local server_dir="$1" plugins_dir="$2" id="$3" policy_json="$4"
+
+    [[ "$id" =~ ^[0-9A-Za-z._-]+/[0-9A-Za-z._-]+$ ]] ||
+        fail "Invalid GitHub owner/repo id: $id"
+
+    local pin release_path
+    pin="$(jq -r '.pin // empty' <<<"$policy_json")"
+
+    if [[ -n "$pin" ]]; then
+        release_path="/repos/$id/releases/tags/$pin"
+    else
+        release_path="/repos/$id/releases/latest"
+    fi
+
+    local status_and_body status release_json
+    status_and_body="$(github_releases_get "$release_path")" ||
+        fail "Could not reach GitHub for '$id'"
+    status="${status_and_body%%$'\n'*}"
+    release_json="${status_and_body#*$'\n'}"
+
+    if [[ "$status" == "404" ]]; then
+        printf 'Skipping "%s": no matching GitHub release found (repo may not use GitHub Releases for distribution)\n' "$id"
+        return 0
+    fi
+
+    [[ "$status" == 2* ]] ||
+        fail "GitHub request for '$id' failed with HTTP $status"
+
+    local tag_name prerelease draft
+    tag_name="$(jq -r '.tag_name // empty' <<<"$release_json")"
+    prerelease="$(jq -r '.prerelease // false' <<<"$release_json")"
+    draft="$(jq -r '.draft // false' <<<"$release_json")"
+
+    [[ -n "$tag_name" ]] ||
+        fail "GitHub returned no tag_name for '$id'"
+
+    if [[ "$prerelease" == "true" || "$draft" == "true" ]]; then
+        printf 'Skipping "%s": release %s is a prerelease/draft\n' "$id" "$tag_name"
+        return 0
+    fi
+
+    local installed
+    installed="$(read_installed_version "$server_dir" "github-releases" "$id")"
+
+    if [[ "$installed" == "$tag_name" ]]; then
+        printf '"%s" is already up to date (%s)\n' "$id" "$tag_name"
+        return 0
+    fi
+
+    local assets_json pick_result count asset_json
+    assets_json="$(jq -c '.assets // []' <<<"$release_json")"
+
+    pick_result="$(github_releases_pick_asset "$assets_json")"
+    count="$(jq -r '.count' <<<"$pick_result")"
+    asset_json="$(jq -c '.asset' <<<"$pick_result")"
+
+    if [[ "$count" == "0" || "$asset_json" == "null" ]]; then
+        printf 'Skipping "%s" %s: no asset in this release looks like a plugin jar; install manually\n' \
+            "$id" "$tag_name"
+        return 0
+    fi
+
+    if [[ "$count" -gt 1 ]]; then
+        local picked_name picked_tiebreak_value
+        picked_name="$(jq -r '.name' <<<"$asset_json")"
+        picked_tiebreak_value="$(jq -r --arg field "$GITHUB_ASSET_TIEBREAK_FIELD" '.[$field]' <<<"$asset_json")"
+        printf 'Multiple candidate assets found for "%s" %s; using "%s" (highest %s: %s)\n' \
+            "$id" "$tag_name" "$picked_name" "$GITHUB_ASSET_TIEBREAK_FIELD" "$picked_tiebreak_value"
+    fi
+
+    local asset_name asset_size asset_url asset_digest expected_hash
+    asset_name="$(jq -r '.name' <<<"$asset_json")"
+    asset_size="$(jq -r '.size' <<<"$asset_json")"
+    asset_url="$(jq -r '.browser_download_url' <<<"$asset_json")"
+    asset_digest="$(jq -r '.digest // empty' <<<"$asset_json")"
+
+    expected_hash=""
+    if [[ "$asset_digest" == sha256:* ]]; then
+        expected_hash="${asset_digest#sha256:}"
+    fi
+
+    [[ -n "$asset_name" && -n "$asset_url" ]] ||
+        fail "GitHub release '$id' $tag_name has an unusable asset entry"
+
+    local target temporary
+    target="$plugins_dir/$asset_name"
+    temporary="$(mktemp "$plugins_dir/.github-releases-download.XXXXXX")"
+    trap 'rm -f "$temporary"' EXIT INT TERM
+
+    printf 'Downloading %s %s\n' "$id" "$tag_name"
+
+    if [[ -n "${JARLET_GITHUB_TOKEN:-}" ]]; then
+        curl \
+            --fail \
+            --silent \
+            --show-error \
+            --location \
+            --retry 3 \
+            --header "User-Agent: $USER_AGENT" \
+            --header "Authorization: Bearer $JARLET_GITHUB_TOKEN" \
+            --output "$temporary" \
+            "$asset_url" ||
+            fail "Download failed for '$id' $tag_name"
+    else
+        curl \
+            --fail \
+            --silent \
+            --show-error \
+            --location \
+            --retry 3 \
+            --header "User-Agent: $USER_AGENT" \
+            --output "$temporary" \
+            "$asset_url" ||
+            fail "Download failed for '$id' $tag_name"
+    fi
+
+    local actual_size
+    actual_size="$(wc -c <"$temporary" | tr -d '[:space:]')"
+
+    [[ "$actual_size" == "$asset_size" ]] ||
+        fail "'$id' $tag_name has the wrong size"
+
+    if [[ -n "$expected_hash" ]]; then
+        local actual_hash
+        actual_hash="$(shasum -a 256 "$temporary" | awk '{print $1}')"
+
+        [[ "$actual_hash" == "$expected_hash" ]] ||
+            fail "'$id' $tag_name SHA-256 verification failed"
+    else
+        printf 'Warning: no digest published for "%s" %s asset; verified by size only\n' "$id" "$tag_name"
+    fi
+
+    mv "$temporary" "$target"
+    trap - EXIT INT TERM
+
+    write_installed_version "$server_dir" "github-releases" "$id" "$(
+        jq -n \
+            --arg version_name "$tag_name" \
+            --arg sha256 "$expected_hash" \
+            --argjson size "$asset_size" \
+            --arg file "$asset_name" \
+            '{
+                version_name: $version_name,
+                version_id: null,
+                channel_name: "",
+                sha256: $sha256,
+                size: $size,
+                file: $file,
+                external: false
+            }'
+    )"
+
+    printf 'Installed %s %s as %s\n' "$id" "$tag_name" "$target"
+    if [[ -n "$expected_hash" ]]; then
+        printf 'SHA-256: %s\n' "$expected_hash"
+    fi
+}
+
+# Self-description read back by router.sh -- see the contract note in
+# ../plugin/hangar.sh's header for the full adapter contract.
+ADAPTER_SOURCE_NAME=github-releases
+ADAPTER_ENTRY_FUNCTION=process_github_releases_plugin
+# Optional -- see router.sh's header and redirect.sh -- lets another
+# source's external-hosting gate recognize a URL as pointing here.
+ADAPTER_URL_MATCHER=github_releases_match_url
+# Cosmetic only -- see router.sh's header and list.sh's cmd_list() for the
+# optional-field mechanism this plugs into. Printed by `list` in place of
+# the raw internal source string.
+ADAPTER_DISPLAY_NAME="Github"

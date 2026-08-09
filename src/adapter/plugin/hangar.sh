@@ -24,12 +24,24 @@
 #   - May assume plugins.sh has already defined: fail(), config_value(),
 #     sys_config_value(), $SCRIPT_DIR, $USER_AGENT, plugin_state_file(),
 #     read_installed_version(), write_installed_version() (all from
-#     store.sh), and that jq/dasel are already confirmed to be on PATH.
+#     store.sh), route_plugin() (router.sh), try_resolve_external_url()/
+#     persist_external_redirect() (redirect.sh), and
+#     handle_untrusted_external_url() (trust.sh -- the --trust fallback
+#     tried after try_resolve_external_url() fails to recognize the URL),
+#     and that jq/dasel are already confirmed to be on PATH.
+#   - Entry point receives trust_requested ("true"/"false") as its 5th
+#     argument, threaded from route_plugin() -- see trust.sh's header.
 #   - Must check any dependencies of its own (curl, shasum, ...) at source
 #     time, before ADAPTER_SOURCE_NAME/ADAPTER_ENTRY_FUNCTION are set;
 #     plugins.sh does not check them unconditionally on its behalf.
 #   - Must keep any credentials/tokens process/env-scoped only, never
 #     written to disk — see HANGAR_JWT below.
+#   - Optionally, if this source's URLs are ever something another
+#     adapter's external-hosting gate might recognize, may also set
+#     ADAPTER_URL_MATCHER to a function(url) that sets MATCHED_ID/
+#     MATCHED_POLICY_JSON and returns 0 on a match, 1 otherwise -- see
+#     redirect.sh's header and github-releases.sh's
+#     github_releases_match_url() for the one adapter that does this today.
 
 command -v curl >/dev/null || fail "curl is required for the hangar source"
 command -v shasum >/dev/null || fail "shasum is required for the hangar source"
@@ -118,6 +130,7 @@ hangar_get() {
 
 process_hangar_plugin() {
     local server_dir="$1" plugins_dir="$2" slug="$3" policy_json="$4"
+    local trust_requested="${5:-false}"
 
     [[ "$slug" =~ ^[0-9A-Za-z._-]+$ ]] ||
         fail "Invalid Hangar project slug: $slug"
@@ -183,9 +196,53 @@ process_hangar_plugin() {
     external_url="$(jq -r '.downloads.PAPER.externalUrl // empty' <<<"$version_json")"
 
     if [[ -n "$external_url" ]]; then
-        printf 'Skipping "%s" %s: hosted externally, install manually: %s\n' \
-            "$slug" "$target_version" "$external_url"
-        return 0
+        # Before giving up: try_resolve_external_url() (redirect.sh) may
+        # recognize this URL as pointing at a source Jarlet already has a
+        # working adapter for -- see spiget.sh's identical gate for the
+        # concrete case this was built from (Spiget's externalUrl pointing
+        # at a GitHub release) and redirect.sh's header for the full
+        # mechanism. No live evidence was found of a Hangar externalUrl
+        # ever pointing at Spiget/SpigotMC specifically, so only GitHub
+        # URLs are recognized as of this writing -- if that ever changes,
+        # it's a github-releases.sh (or a new adapter)'s ADAPTER_URL_MATCHER
+        # to add, not something to special-case here.
+        if try_resolve_external_url "$external_url"; then
+            printf '"%s" %s is hosted externally at %s -- redirecting to %s (%s)\n' \
+                "$slug" "$target_version" "$external_url" "$REDIRECT_ID" "$REDIRECT_SOURCE"
+
+            persist_external_redirect "$server_dir" "hangar" "$slug" "$REDIRECT_SOURCE" "$REDIRECT_ID" "$REDIRECT_POLICY_JSON"
+            route_plugin "$server_dir" "$plugins_dir" "$REDIRECT_SOURCE" "$REDIRECT_ID" "$REDIRECT_POLICY_JSON" "$trust_requested"
+            return $?
+        fi
+
+        # Next fallback (trust.sh): the URL isn't recognizable as another
+        # adapter's, but the user may have already trusted (or now be
+        # trusting, via --trust) the domain it's hosted on -- see trust.sh's
+        # header for the full mechanism. Hangar's fileInfo (its own
+        # checksum/size) and its externalUrl are confirmed live to be
+        # mutually exclusive on real data (Geyser: fileInfo=null whenever
+        # externalUrl is set) -- but fileInfo is still read here and passed
+        # through in case that ever isn't true for some other project;
+        # handle_untrusted_external_url() only uses it if non-empty.
+        #
+        # target_version/channel are also passed through here (as this
+        # call's version_name/channel_name) -- they were already resolved
+        # above (the target_version-vs-installed check that gates this
+        # whole function runs before externalUrl is even looked at), so
+        # this is real Hangar version identity, not something invented for
+        # the external-hosting case. Only the download mechanism differs
+        # for a trusted external URL, not the versioning -- see
+        # handle_untrusted_external_url()'s param doc in trust.sh.
+        local ext_hash ext_size ext_channel_name
+        ext_hash="$(jq -r '.downloads.PAPER.fileInfo.sha256Hash // empty' <<<"$version_json")"
+        ext_size="$(jq -r '.downloads.PAPER.fileInfo.sizeBytes // empty' <<<"$version_json")"
+        ext_channel_name="$(jq -r '.channel.name // empty' <<<"$version_json")"
+
+        handle_untrusted_external_url \
+            "$server_dir" "$plugins_dir" "hangar" "$slug" "$slug" \
+            "$external_url" "$ext_hash" "$ext_size" "$slug.jar" "$trust_requested" \
+            "$target_version" "$ext_channel_name"
+        return $?
     fi
 
     local file_name expected_hash expected_size
@@ -265,3 +322,7 @@ process_hangar_plugin() {
 # Self-description read back by router.sh -- see the contract note above.
 ADAPTER_SOURCE_NAME=hangar
 ADAPTER_ENTRY_FUNCTION=process_hangar_plugin
+# Cosmetic only -- see router.sh's header and list.sh's cmd_list() for the
+# optional-field mechanism this plugs into. Printed by `list` in place of
+# the raw internal source string.
+ADAPTER_DISPLAY_NAME="Hangar"

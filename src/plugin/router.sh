@@ -20,6 +20,21 @@
 # May assume plugin.sh has already defined: fail(), SCRIPT_DIR, and that
 # store.sh has already been sourced (route_plugin() is called by add too,
 # which relies on store.sh's write_toml_file() having already run).
+# run_update_one() additionally relies on resolve.sh's
+# resolve_declared_identifier() having already been sourced.
+#
+# An adapter's ADAPTER_URL_MATCHER is optional (unlike ADAPTER_SOURCE_NAME/
+# ADAPTER_ENTRY_FUNCTION) -- only an adapter another source's external-hosting
+# URL might plausibly point at needs to set one. See redirect.sh's header for
+# the full mechanism this enables and ../adapter/plugin/github-releases.sh's
+# github_releases_match_url() for the one adapter that sets it today.
+#
+# ADAPTER_DISPLAY_NAME is likewise optional -- a purely cosmetic, human-
+# readable name (e.g. "SpigotMC") an adapter may set for list.sh's cmd_list()
+# to print instead of the raw internal source string. It carries zero
+# routing/storage meaning: the internal source name (filename, jarlet.toml's
+# `source` field, plugins-state.json's `source` field) is completely
+# unaffected by it and is never derived from it.
 
 # Maps a loaded source name to its adapter's entry-point function, so a
 # source is sourced (and its own deps checked) lazily and only once per
@@ -35,25 +50,48 @@ adapter_loaded_var() {
     printf 'ADAPTER_LOADED_%s' "${1//-/_}"
 }
 
-# Routes a single declared entry (source/id/policy_json) to its source
-# adapter. Shared by the update-all loop, a targeted `update <source> <id>`,
-# and add's immediate post-declare fetch, so all three go through the exact
-# same routing path.
-route_plugin() {
-    local server_dir="$1" plugins_dir="$2" source="$3" id="$4" policy_json="$5"
+# Companion to adapter_loaded_var(), same bash-3.2-compatible mechanism:
+# holds the optional ADAPTER_URL_MATCHER a loaded adapter may have set (see
+# load_adapter() below), namespaced per source for the same reason
+# adapter_loaded_var() is -- redirect.sh's try_resolve_external_url() loads
+# more than one adapter file in sequence while looking for a matcher, and a
+# plain (non-namespaced) variable would just get clobbered by each load.
+adapter_url_matcher_var() {
+    printf 'ADAPTER_URL_MATCHER_%s' "${1//-/_}"
+}
 
+# Companion to adapter_loaded_var(), same bash-3.2-compatible mechanism:
+# holds the optional ADAPTER_DISPLAY_NAME a loaded adapter may have set (see
+# load_adapter() below), namespaced per source for the same reason
+# adapter_url_matcher_var() is.
+adapter_display_name_var() {
+    printf 'ADAPTER_DISPLAY_NAME_%s' "${1//-/_}"
+}
+
+# Idempotently loads (sources) the adapter file for `source`, if one exists.
+# Extracted out of route_plugin() so redirect.sh's try_resolve_external_url()
+# can also load adapters (to inspect their optional ADAPTER_URL_MATCHER)
+# without duplicating this sourcing/sanity-check logic or risking a
+# double-source of a readonly-var-declaring adapter file. Returns 1 (touching
+# nothing) if no adapter file exists for `source`; the caller decides how to
+# report that -- route_plugin()'s missing-adapter message differs from
+# try_resolve_external_url()'s silent "not a match, try the next one".
+#
+# On success, adapter_loaded_var("$source") holds ADAPTER_ENTRY_FUNCTION,
+# and -- only if the adapter set one -- adapter_url_matcher_var("$source")
+# holds ADAPTER_URL_MATCHER and adapter_display_name_var("$source") holds
+# ADAPTER_DISPLAY_NAME.
+load_adapter() {
+    local source="$1"
     local adapter_file="$SCRIPT_DIR/../adapter/plugin/$source.sh"
 
-    if [[ ! -f "$adapter_file" ]]; then
-        printf 'Skipping "%s" (%s): no adapter is implemented for this source\n' "$id" "$source"
-        return 0
-    fi
+    [[ -f "$adapter_file" ]] || return 1
 
     local loaded_var
     loaded_var="$(adapter_loaded_var "$source")"
 
     if [[ -z "${!loaded_var:-}" ]]; then
-        local ADAPTER_SOURCE_NAME="" ADAPTER_ENTRY_FUNCTION=""
+        local ADAPTER_SOURCE_NAME="" ADAPTER_ENTRY_FUNCTION="" ADAPTER_URL_MATCHER="" ADAPTER_DISPLAY_NAME=""
         # shellcheck source=/dev/null
         . "$adapter_file"
 
@@ -66,10 +104,75 @@ route_plugin() {
         declare -F "$ADAPTER_ENTRY_FUNCTION" >/dev/null ||
             fail "Adapter '$adapter_file' declares ADAPTER_ENTRY_FUNCTION='$ADAPTER_ENTRY_FUNCTION' but that function is not defined"
 
+        if [[ -n "$ADAPTER_DISPLAY_NAME" ]]; then
+            printf -v "$(adapter_display_name_var "$source")" '%s' "$ADAPTER_DISPLAY_NAME"
+        fi
+
+        if [[ -n "$ADAPTER_URL_MATCHER" ]]; then
+            declare -F "$ADAPTER_URL_MATCHER" >/dev/null ||
+                fail "Adapter '$adapter_file' declares ADAPTER_URL_MATCHER='$ADAPTER_URL_MATCHER' but that function is not defined"
+
+            printf -v "$(adapter_url_matcher_var "$source")" '%s' "$ADAPTER_URL_MATCHER"
+        fi
+
         printf -v "$loaded_var" '%s' "$ADAPTER_ENTRY_FUNCTION"
     fi
 
-    "${!loaded_var}" "$server_dir" "$plugins_dir" "$id" "$policy_json"
+    return 0
+}
+
+# Cosmetic-only accessor used by list.sh's cmd_list() to print a
+# human-readable name instead of the raw internal source string. Loads the
+# adapter (if not already loaded) purely to read its self-declared
+# ADAPTER_DISPLAY_NAME -- load_adapter() only sources the adapter file and
+# checks its own local dependencies, it never touches the network, so this
+# is safe to call for every declared entry `list` renders. Falls back to
+# the raw `source` string itself -- defensively, matching how
+# ADAPTER_URL_MATCHER is optional today -- if the adapter set no display
+# name, or if no adapter file exists for `source` at all (e.g. a stale/
+# hand-edited jarlet.toml entry).
+adapter_display_name() {
+    local source="$1"
+
+    load_adapter "$source" || { printf '%s' "$source"; return 0; }
+
+    local display_var
+    display_var="$(adapter_display_name_var "$source")"
+
+    if [[ -n "${!display_var:-}" ]]; then
+        printf '%s' "${!display_var}"
+    else
+        printf '%s' "$source"
+    fi
+}
+
+# Routes a single declared entry (source/id/policy_json) to its source
+# adapter. Shared by the update-all loop, a targeted `update <source> <id>`,
+# add's immediate post-declare fetch, and redirect.sh's external-URL
+# resolution (once it has rewritten jarlet.toml to the redirected
+# source/id, it calls back into this exact same path to actually fetch),
+# so all of them go through the exact same routing path.
+#
+# trust_requested ("true"/"false", default "false" when omitted) is
+# threaded straight through to the adapter's entry function as its final
+# argument -- see trust.sh's header and hangar.sh's/spiget.sh's external-
+# hosting gates for what it does. Kept as an explicit parameter (not an
+# implicit global) for the same reason server_dir/policy_json are: it's
+# how every other piece of per-invocation state already flows through this
+# call chain.
+route_plugin() {
+    local server_dir="$1" plugins_dir="$2" source="$3" id="$4" policy_json="$5"
+    local trust_requested="${6:-false}"
+
+    if ! load_adapter "$source"; then
+        printf 'Skipping "%s" (%s): no adapter is implemented for this source\n' "$id" "$source"
+        return 0
+    fi
+
+    local loaded_var
+    loaded_var="$(adapter_loaded_var "$source")"
+
+    "${!loaded_var}" "$server_dir" "$plugins_dir" "$id" "$policy_json" "$trust_requested"
 }
 
 # Runs the identify->check-version->update flow for every declared plugin.
@@ -78,6 +181,7 @@ route_plugin() {
 # `plugins.sh <name>` invocation with no subcommand at all.
 run_update_all() {
     local server_dir="$1" plugins_dir="$2" plugins_json="$3"
+    local trust_requested="${4:-false}"
     local count i entry source id policy_json
 
     count="$(jq '(.plugins // []) | length' <<<"$plugins_json")"
@@ -93,16 +197,25 @@ run_update_all() {
         id="$(jq -r '.id' <<<"$entry")"
         policy_json="$(jq -c '.policy' <<<"$entry")"
 
-        route_plugin "$server_dir" "$plugins_dir" "$source" "$id" "$policy_json"
+        route_plugin "$server_dir" "$plugins_dir" "$source" "$id" "$policy_json" "$trust_requested"
     done
 }
 
 # Runs the identify->check-version->update flow for exactly one declared
-# entry, identified by (source, id) -- the same key plugins-state.json
-# already uses.
+# entry, identified by a bare `identifier` -- resolved against the
+# currently declared entries by id alone via resolve.sh's
+# resolve_declared_identifier() (source is no longer needed as input,
+# since ids are globally unique per server; see resolve.sh's header
+# comment). Once resolved, this looks up the same (source, id) key
+# plugins-state.json already uses.
 run_update_one() {
-    local plugins_json="$1" server_dir="$2" plugins_dir="$3" source="$4" id="$5"
-    local entry policy_json
+    local plugins_json="$1" server_dir="$2" plugins_dir="$3" identifier="$4"
+    local trust_requested="${5:-false}"
+    local source id entry policy_json
+
+    resolve_declared_identifier "$plugins_json" "$identifier" "update"
+    source="$RESOLVED_SOURCE"
+    id="$RESOLVED_ID"
 
     entry="$(
         jq -c \
@@ -116,5 +229,5 @@ run_update_one() {
         fail "No declared plugin with source '$source' and id '$id'"
 
     policy_json="$(jq -c '.policy' <<<"$entry")"
-    route_plugin "$server_dir" "$plugins_dir" "$source" "$id" "$policy_json"
+    route_plugin "$server_dir" "$plugins_dir" "$source" "$id" "$policy_json" "$trust_requested"
 }

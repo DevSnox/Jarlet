@@ -5,7 +5,7 @@
 # and rewriting jarlet.toml -- and has no knowledge of any plugin source
 # (hangar, spiget, ...). Contrast with router.sh, which decides which
 # source adapter to call, and the adapters themselves (e.g.
-# ../source/plugin/hangar.sh), which talk to those sources' APIs.
+# ../adapter/plugin/hangar.sh), which talk to those sources' APIs.
 #
 # May assume plugin.sh has already defined: fail(), SCRIPT_DIR, and that
 # jq/dasel are already confirmed to be on PATH.
@@ -99,6 +99,22 @@ remove_installed_version() {
 
     mv "$tmp" "$file"
     trap - RETURN
+}
+
+# Prints the whole plugins-state.json array as-is (compact JSON), or "[]"
+# if no state file exists yet for this server. Used by list.sh to build a
+# combined declared+installed view without adding a second single-entry
+# lookup per declared plugin.
+read_all_installed() {
+    local server_dir="$1"
+    local file
+    file="$(plugin_state_file "$server_dir")"
+
+    if [[ -f "$file" ]]; then
+        jq -c '.' "$file"
+    else
+        printf '[]'
+    fi
 }
 
 # Persists a full plugins_json document (as produced by toml_to_json() and
