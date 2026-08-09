@@ -154,7 +154,7 @@ object SourceResolver {
      * already declared.
      */
     fun checkIdAvailable(toml: JarletToml, id: String) {
-        val existing = toml.plugins.firstOrNull { it.id == id } ?: return
+        val existing = toml.plugins.firstOrNull { it.id.equals(id, ignoreCase = true) } ?: return
         throw ResolutionException(
             "'$id' is already declared under source '${existing.source}'; remove it first if you want to redeclare it under a different source",
         )
@@ -170,7 +170,16 @@ object SourceResolver {
      * than once -- e.g. a hand-edited jarlet.toml).
      */
     fun resolveDeclaredIdentifier(toml: JarletToml, identifier: String, context: String): Resolved {
-        val matches = toml.plugins.filter { it.id == identifier }
+        // Case-insensitive: a user typing `geyser` should match a plugin
+        // declared as `Geyser` (e.g. matching Hangar's real project-slug
+        // casing) -- ids are otherwise opaque strings to the user, and
+        // there is no reason to make them retype the exact declared
+        // casing. If two ids ever differ only by case (only possible via
+        // a hand-edited jarlet.toml, since checkIdAvailable() prevents it
+        // at declare time), the existing multi-match branch below still
+        // reports that as the "declared under more than one source"
+        // consistency error rather than silently guessing.
+        val matches = toml.plugins.filter { it.id.equals(identifier, ignoreCase = true) }
 
         if (matches.isEmpty()) {
             throw ResolutionException("No declared plugin with id '$identifier' (for $context)")
@@ -181,7 +190,11 @@ object SourceResolver {
             )
         }
 
-        return Resolved(matches.single().source, identifier)
+        // Return the declared entry's own canonical-cased id (not the
+        // user's raw, possibly differently-cased, input) so downstream
+        // exact-match lookups (e.g. RemoveCommand's toml rewrite,
+        // PluginStateStore reads/writes) keep matching correctly.
+        return Resolved(matches.single().source, matches.single().id)
     }
 
     private val HANGAR_ID = Regex("^[0-9A-Za-z._-]+$")

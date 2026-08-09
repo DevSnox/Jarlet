@@ -61,7 +61,12 @@ class ListCommand : CliktCommand(name = "list") {
 
         val merged = declared
             .map { d ->
-                val i = installed.firstOrNull { it.source == d.source && it.id == d.id }
+                // Case-insensitive id match: declared and installed-state
+                // ids should normally share the exact same casing (both
+                // come from the same adapter-resolved id at declare
+                // time), but matching loosely here avoids silently
+                // showing a plugin as "not installed" if that ever drifts.
+                val i = installed.firstOrNull { it.source == d.source && it.id.equals(d.id, ignoreCase = true) }
                 MergedRow(
                     id = d.id,
                     source = d.source,

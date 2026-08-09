@@ -92,7 +92,10 @@ object PluginRouter {
         trustRequested: Boolean = false,
         echo: (String) -> Unit = ::println,
     ) {
-        val matches = declared.filter { it.id == identifier }
+        // Case-insensitive to match resolveDeclaredIdentifier()'s
+        // behavior in SourceResolver -- a user typing `geyser` should
+        // still find a plugin declared as `Geyser`.
+        val matches = declared.filter { it.id.equals(identifier, ignoreCase = true) }
         val entry = when (matches.size) {
             0 -> throw PluginRouterException("No declared plugin with id '$identifier'")
             1 -> matches.single()
