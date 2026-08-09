@@ -61,21 +61,21 @@ class UpdateCommand : CliktCommand(name = "update") {
 
         val target = identifier
         if (target == null) {
-            PluginRouter.routeAll(serverDir, pluginsDir, toml.plugins, trust, echo = { echo(it) })
+            PluginRouter.routeAll(serverDir, pluginsDir, toml.plugins, trust)
 
             var currentToml = toml
             for (entry in toml.plugins) {
                 currentToml = PluginDependencyChecker.checkAndResolve(
-                    serverDir, pluginsDir, tomlFile, currentToml, entry.source, entry.id, resolveDependencies, trust, echo = { echo(it) },
+                    serverDir, pluginsDir, tomlFile, currentToml, entry.source, entry.id, resolveDependencies, trust,
                 )
             }
         } else {
-            PluginRouter.routeOne(serverDir, pluginsDir, toml.plugins, target, trust, echo = { echo(it) })
+            PluginRouter.routeOne(serverDir, pluginsDir, toml.plugins, target, trust)
 
             val entry = toml.plugins.firstOrNull { it.id.equals(target, ignoreCase = true) }
             if (entry != null) {
                 PluginDependencyChecker.checkAndResolve(
-                    serverDir, pluginsDir, tomlFile, toml, entry.source, entry.id, resolveDependencies, trust, echo = { echo(it) },
+                    serverDir, pluginsDir, tomlFile, toml, entry.source, entry.id, resolveDependencies, trust,
                 )
             }
         }

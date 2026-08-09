@@ -1,5 +1,6 @@
 package me.devsnox.jarlet.server
 
+import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.adapter.server.ServerSoftwareAdapters
 import me.devsnox.jarlet.command.lib.ServerCommandException
 import me.devsnox.jarlet.config.JarletToml
@@ -151,7 +152,7 @@ internal object ServerSetup {
         tempFile.toFile().deleteOnExit()
         Files.write(tempFile, bytes)
 
-        println("No template file given -- using the bundled default $templateName template")
+        Log.info("No template file given -- using the bundled default $templateName template")
         return tempFile
     }
 

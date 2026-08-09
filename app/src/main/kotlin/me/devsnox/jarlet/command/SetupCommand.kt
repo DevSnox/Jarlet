@@ -4,6 +4,7 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.optional
+import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.command.lib.serverCommandBody
 import me.devsnox.jarlet.server.ServerSetup
 
@@ -22,7 +23,7 @@ class SetupCommand : CliktCommand(name = "setup") {
 
     override fun run() = serverCommandBody {
         val result = ServerSetup.ensure(name, templateFile)
-        echo("Server \"$name\" is ready at ${result.serverDir}")
-        echo("Run: jarlet start $name")
+        Log.info("Server \"$name\" is ready at ${result.serverDir}")
+        Log.info("Run: jarlet start $name")
     }
 }

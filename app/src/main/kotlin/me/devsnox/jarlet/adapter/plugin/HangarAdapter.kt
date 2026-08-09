@@ -2,6 +2,7 @@ package me.devsnox.jarlet.adapter.plugin
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.config.SysConfig
 import me.devsnox.jarlet.config.JarletToml
 import me.devsnox.jarlet.plugin.ExternalUrlRedirector
@@ -142,7 +143,7 @@ object HangarAdapter : PluginSourceAdapter {
         }
 
         if (!project.visibility.isNullOrEmpty() && project.visibility != "public") {
-            println("Skipping \"$slug\": project visibility is \"${project.visibility}\" (not public)")
+            Log.info("Skipping \"$slug\": project visibility is \"${project.visibility}\" (not public)")
             return
         }
 
@@ -159,7 +160,7 @@ object HangarAdapter : PluginSourceAdapter {
 
         val installed = PluginStateStore.read(serverDir, sourceName, slug)?.versionName
         if (installed == targetVersion) {
-            println("\"$slug\" is already up to date ($targetVersion)")
+            Log.info("\"$slug\" is already up to date ($targetVersion)")
             return
         }
 
@@ -172,13 +173,13 @@ object HangarAdapter : PluginSourceAdapter {
         }
 
         if (!version.visibility.isNullOrEmpty() && version.visibility != "public") {
-            println("Skipping \"$slug\" $targetVersion: version visibility is \"${version.visibility}\"")
+            Log.info("Skipping \"$slug\" $targetVersion: version visibility is \"${version.visibility}\"")
             return
         }
 
         val reviewState = version.reviewState ?: ""
         if (reviewState !in RECOGNIZED_REVIEW_STATES) {
-            println("Skipping \"$slug\" $targetVersion: review state is \"$reviewState\", not a recognized state")
+            Log.info("Skipping \"$slug\" $targetVersion: review state is \"$reviewState\", not a recognized state")
             return
         }
 
@@ -188,7 +189,7 @@ object HangarAdapter : PluginSourceAdapter {
         if (!externalUrl.isNullOrEmpty()) {
             val redirect = ExternalUrlRedirector.tryResolve(externalUrl)
             if (redirect != null) {
-                println(
+                Log.info(
                     "\"$slug\" $targetVersion is hosted externally at $externalUrl -- redirecting to ${redirect.id} (${redirect.source})",
                 )
                 ExternalUrlRedirector.dispatch(redirect, serverDir, pluginsDir, trustRequested)
@@ -226,7 +227,7 @@ object HangarAdapter : PluginSourceAdapter {
         val target = pluginsDir.resolve(fileName)
         val temporary = Files.createTempFile(pluginsDir, ".hangar-download-", ".tmp")
         try {
-            println("Downloading $slug $targetVersion")
+            Log.info("Downloading $slug $targetVersion")
 
             if (jwt.isNullOrEmpty()) authenticate()
 
@@ -269,8 +270,8 @@ object HangarAdapter : PluginSourceAdapter {
             ),
         )
 
-        println("Installed $slug $targetVersion as $target")
-        println("SHA-256: $expectedHash")
+        Log.info("Installed $slug $targetVersion as $target")
+        Log.info("SHA-256: $expectedHash")
     }
 
     @Serializable

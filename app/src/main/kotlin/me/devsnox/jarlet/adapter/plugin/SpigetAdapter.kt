@@ -3,6 +3,7 @@ package me.devsnox.jarlet.adapter.plugin
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.config.JarletToml
 import me.devsnox.jarlet.config.SysConfig
 import me.devsnox.jarlet.plugin.ExternalUrlRedirector
@@ -171,7 +172,7 @@ object SpigetAdapter : PluginSourceAdapter {
             if (!externalUrl.isNullOrEmpty()) {
                 val redirect = ExternalUrlRedirector.tryResolve(externalUrl)
                 if (redirect != null) {
-                    println(
+                    Log.info(
                         "\"$label\" ($id) is hosted externally at $externalUrl -- redirecting to ${redirect.id} (${redirect.source})",
                     )
                     ExternalUrlRedirector.dispatch(redirect, serverDir, pluginsDir, trustRequested)
@@ -180,7 +181,7 @@ object SpigetAdapter : PluginSourceAdapter {
             }
 
             if (externalUrl.isNullOrEmpty()) {
-                println("Skipping \"$label\" ($id): resource is hosted externally, install manually (no external URL was reported by Spiget)")
+                Log.info("Skipping \"$label\" ($id): resource is hosted externally, install manually (no external URL was reported by Spiget)")
                 return
             }
 
@@ -200,7 +201,7 @@ object SpigetAdapter : PluginSourceAdapter {
         }
 
         if (resource.premium == true) {
-            println("Skipping \"$label\" ($id): resource is premium/paid, install manually")
+            Log.info("Skipping \"$label\" ($id): resource is premium/paid, install manually")
             return
         }
 
@@ -236,7 +237,7 @@ object SpigetAdapter : PluginSourceAdapter {
         // plays in HangarAdapter.
         val installed = PluginStateStore.read(serverDir, sourceName, id)?.versionName
         if (installed == targetUuid) {
-            println("\"$label\" is already up to date ($displayVersion)")
+            Log.info("\"$label\" is already up to date ($displayVersion)")
             return
         }
 
@@ -246,7 +247,7 @@ object SpigetAdapter : PluginSourceAdapter {
 
         val temporary = Files.createTempFile(pluginsDir, ".spiget-download-", ".tmp")
         try {
-            println("Downloading $label $displayVersion")
+            Log.info("Downloading $label $displayVersion")
 
             // Always the proxy endpoint -- the plain /download redirects to
             // a spigotmc.org HTML page, not a raw file (confirmed live; see
@@ -278,7 +279,10 @@ object SpigetAdapter : PluginSourceAdapter {
                 }
             }
 
-            println("Warning: Spiget exposes no checksum for any plugin -- \"$label\" $displayVersion was only verified by file size, not cryptographically")
+            // Log.info, not Log.warn: this was plain (stdout) println() before
+            // this migration; the literal "Warning: " text is kept as-is
+            // rather than doubled by Log.warn()'s own stderr-bound prefix.
+            Log.info("Warning: Spiget exposes no checksum for any plugin -- \"$label\" $displayVersion was only verified by file size, not cryptographically")
 
             // Prefer the real filename the proxy reports over the sanitized
             // guess, when present.
@@ -315,8 +319,8 @@ object SpigetAdapter : PluginSourceAdapter {
             Files.deleteIfExists(temporary)
         }
 
-        println("Installed $label $displayVersion as $target")
-        println("No cryptographic checksum available for this source (size-verified only)")
+        Log.info("Installed $label $displayVersion as $target")
+        Log.info("No cryptographic checksum available for this source (size-verified only)")
     }
 
     @Serializable

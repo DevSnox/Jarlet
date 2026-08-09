@@ -2,6 +2,7 @@ package me.devsnox.jarlet.adapter.server
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.config.JarletVersion
 import me.devsnox.jarlet.config.SysConfig
 import java.io.IOException
@@ -77,7 +78,7 @@ object PaperAdapter : ServerSoftwareAdapter {
 
         val temporary = Files.createTempFile(targetDir, ".paper-download-", ".tmp")
         try {
-            println("Downloading Paper $minecraftVersion build ${build.id}")
+            Log.info("Downloading Paper $minecraftVersion build ${build.id}")
 
             downloadTo(download.url, temporary)
 
@@ -96,8 +97,8 @@ object PaperAdapter : ServerSoftwareAdapter {
             Files.deleteIfExists(temporary)
         }
 
-        println("Installed ${download.name} as $target")
-        println("SHA-256: ${download.checksums.sha256}")
+        Log.info("Installed ${download.name} as $target")
+        Log.info("SHA-256: ${download.checksums.sha256}")
     }
 
     private fun fetchProject(): PaperProjectResponse {

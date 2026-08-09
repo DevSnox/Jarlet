@@ -3,6 +3,7 @@ package me.devsnox.jarlet.command
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.parameters.arguments.argument
+import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.command.lib.resolvePluginCommandContext
 import me.devsnox.jarlet.command.lib.serverCommandBody
 import java.nio.file.Files
@@ -57,7 +58,7 @@ class RemoveCommand : CliktCommand(name = "remove") {
 
         val updatedToml = toml.copy(plugins = toml.plugins.filterNot { it.source == source && it.id == id })
 
-        echo("Note: this rewrites $tomlFile in full; hand-written comments and formatting are not preserved.")
+        Log.info("Note: this rewrites $tomlFile in full; hand-written comments and formatting are not preserved.")
         updatedToml.write(tomlFile)
 
         val installed = PluginStateStore.read(serverDir, source, id)
@@ -65,12 +66,12 @@ class RemoveCommand : CliktCommand(name = "remove") {
             val jarFile = pluginsDir.resolve(installed.file)
             if (Files.isRegularFile(jarFile)) {
                 Files.delete(jarFile)
-                echo("Deleted $jarFile")
+                Log.info("Deleted $jarFile")
             }
         }
 
         PluginStateStore.remove(serverDir, source, id)
 
-        echo("""Removed "$id" ($source) from $tomlFile""")
+        Log.info("""Removed "$id" ($source) from $tomlFile""")
     }
 }

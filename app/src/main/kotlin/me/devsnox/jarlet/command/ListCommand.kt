@@ -10,6 +10,7 @@ import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.int
 import com.github.ajalt.mordant.table.ColumnWidth
 import com.github.ajalt.mordant.table.table
+import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.command.lib.ServerCommandException
 import me.devsnox.jarlet.command.lib.resolvePluginCommandContext
 import me.devsnox.jarlet.command.lib.serverCommandBody
@@ -94,7 +95,7 @@ class ListCommand : CliktCommand(name = "list") {
             .sortedWith(compareBy({ it.source }, { it.sortId }))
 
         if (merged.isEmpty()) {
-            echo("No plugins declared")
+            Log.info("No plugins declared")
             return@serverCommandBody
         }
 
@@ -145,7 +146,7 @@ class ListCommand : CliktCommand(name = "list") {
                 append("Page $page of $totalPages ($count plugin(s) total)")
                 if (page < totalPages) append(" -- use --page ${page + 1} for more")
             }
-            echo(footer)
+            Log.info(footer)
         }
     }
 

@@ -7,7 +7,7 @@ package me.devsnox.jarlet
  * friction for a CLI that needs four print functions and a boolean).
  *
  * Plain top-level `object`, no `CliktCommand` dependency -- reachable from
- * anywhere, including non-command singletons like `PluginHttp` and the
+ * anywhere, including non-command singletons like `SharedHttp` and the
  * adapters, which have no `Context` to pull an option from.
  *
  * [debugEnabled] is process-global mutable state, harmless for a

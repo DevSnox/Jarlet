@@ -1,5 +1,6 @@
 package me.devsnox.jarlet.http
 
+import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.config.JarletVersion
 import me.devsnox.jarlet.config.SysConfig
 import java.io.IOException
@@ -69,7 +70,9 @@ object SharedHttp {
      */
     fun get(url: String, headers: Map<String, String> = emptyMap()): Response {
         val request = requestBuilder(url, headers).GET().build()
+        val start = System.currentTimeMillis()
         val response = send(request, HttpResponse.BodyHandlers.ofString())
+        Log.debug("GET $url -> ${response.statusCode()} (${System.currentTimeMillis() - start}ms)")
         return Response(response.statusCode(), response.body())
     }
 
@@ -99,7 +102,9 @@ object SharedHttp {
             .header("Content-Type", "application/x-www-form-urlencoded")
             .POST(HttpRequest.BodyPublishers.ofString(encoded))
             .build()
+        val start = System.currentTimeMillis()
         val response = send(request, HttpResponse.BodyHandlers.ofString())
+        Log.debug("POST $url -> ${response.statusCode()} (${System.currentTimeMillis() - start}ms)")
         return Response(response.statusCode(), response.body())
     }
 
@@ -123,7 +128,7 @@ object SharedHttp {
     ): Download {
         var lastError: Exception? = null
 
-        repeat(retries) {
+        repeat(retries) { attempt ->
             try {
                 val request = requestBuilder(url, headers).GET().build()
                 val response = send(request, HttpResponse.BodyHandlers.ofFile(target))
@@ -160,6 +165,7 @@ object SharedHttp {
                 )
                 return Download(actualSize, fileName)
             } catch (e: Exception) {
+                Log.debug("download attempt ${attempt + 1}/$retries failed for $url: ${e.message}")
                 lastError = e
             }
         }

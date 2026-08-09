@@ -7,6 +7,7 @@ import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.optional
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
+import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.adapter.server.ServerSoftwareAdapters
 import me.devsnox.jarlet.command.lib.ServerCommandException
 import me.devsnox.jarlet.command.lib.serverCommandBody
@@ -91,7 +92,7 @@ class StartCommand : CliktCommand(name = "start") {
             Files.deleteIfExists(pidFile)
         }
 
-        echo("Starting Paper ${server.minecraftVersion} with ${server.memory} memory")
+        Log.info("Starting Paper ${server.minecraftVersion} with ${server.memory} memory")
 
         val command = listOf(
             "java",
@@ -132,14 +133,20 @@ class StartCommand : CliktCommand(name = "start") {
 
             val logFile = serverDir.resolve("logs/latest.log")
             if (Files.isRegularFile(logFile)) {
+                // Left as a direct CliktCommand.echo(..., err = true), not
+                // Log -- these are raw lines tailed from the crashed
+                // server's own log file, not a Jarlet-authored message, so
+                // none of Log's four functions (each either silent by
+                // default or prefix-adding) is a faithful fit without
+                // changing this output's actual content.
                 Files.readAllLines(logFile).takeLast(30).forEach { echo(it, err = true) }
             }
 
             throw ServerCommandException("Paper stopped during startup")
         }
 
-        echo("Server \"$name\" started with PID $serverPid")
-        echo("Logs: ${serverDir.resolve("logs/latest.log")}")
+        Log.info("Server \"$name\" started with PID $serverPid")
+        Log.info("Logs: ${serverDir.resolve("logs/latest.log")}")
     }
 
     private companion object {

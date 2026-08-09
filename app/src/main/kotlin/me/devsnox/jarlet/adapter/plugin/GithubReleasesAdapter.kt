@@ -8,6 +8,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
+import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.config.JarletToml
 import me.devsnox.jarlet.config.SysConfig
 import me.devsnox.jarlet.plugin.InstalledVersion
@@ -152,7 +153,7 @@ object GithubReleasesAdapter : PluginSourceAdapter, PluginUrlMatcher {
         }
 
         if (response.status == 404) {
-            println("Skipping \"$id\": no matching GitHub release found (repo may not use GitHub Releases for distribution)")
+            Log.info("Skipping \"$id\": no matching GitHub release found (repo may not use GitHub Releases for distribution)")
             return
         }
         if (response.status !in 200..299) {
