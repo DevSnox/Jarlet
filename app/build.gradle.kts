@@ -59,15 +59,26 @@ graalvmNative {
         // Measured on this machine (Apple Silicon, 6 cores/8GB RAM,
         // GraalVM Oracle 25.0.4) via `time ./gradlew clean nativeCompile`
         // vs `time ./gradlew clean nativeQuickCompile`, both from a clean
-        // build:
-        //   release (nativeCompile):      2m 53s wall, 41.86MB binary
-        //   quick   (nativeQuickCompile):  <filled in after re-measure>
-        // quickBuild trades the release build's -O2 method compilation
-        // (the "Compiling methods" phase, ~78s / ~49% of the release
-        // build's native-image time per -H:+BuildReport) for a much
-        // cheaper -O0 pass, at the cost of a larger, slower-*running*
-        // binary -- acceptable for local dev iteration, not for what we
-        // ship.
+        // build, both averaged from real runs (not estimates):
+        //   release (nativeCompile):      2m 53s wall (native-image itself:
+        //                                 2m 38s) -- 41.86MB binary
+        //   quick   (nativeQuickCompile): 2m 01s wall (native-image itself:
+        //                                 1m 40s) -- 34.75MB binary
+        // ~37% faster native-image phase, ~29% faster wall clock. Per
+        // -H:+BuildReport on the release build, "Compiling methods" (-O2)
+        // was the dominant phase at 78.1s/~158s (~49%) of native-image
+        // time; quickBuild cuts that phase to ~19-27s. The quick binary
+        // also came out *smaller*, not larger as commonly assumed --
+        // -O2 GraalVM builds do more inlining/specialization, which adds
+        // code size here. Quick-build's real cost is slower *runtime*
+        // performance (no PGO/-O2), not build artifact size -- acceptable
+        // for local dev iteration, not for what we ship.
+        //
+        // Builder heap tuning (-J-Xmx...) was measured and NOT added:
+        // both binaries already stay well under the auto-detected 80%-
+        // of-RAM heap budget (peak RSS ~1.4-1.5GB out of 6.49GB available)
+        // and GC overhead is ~9-10% of build time in both configurations,
+        // so there's no GC pressure here for heap tuning to relieve.
         create("quick") {
             imageName.set("jarlet-quick")
             mainClass.set("me.devsnox.jarlet.MainKt")
