@@ -15,19 +15,23 @@ Please open an issue, if you'd like to request another source to be included.
 
 # Usage
 
-Clone this repo. Go into jarlet.conf and change configurations if needed.
+Clone this repo. Go into jarlet.toml and change configurations if needed.
 Standart settings:
-```conf
-# jarlet.conf
-NAME=
-MINECRAFT_VERSION=26.2
-MEMORY=2G
-PORT=25565
-ONLINE_MODE=true
+```toml
+# jarlet.toml
+[template]
+name = "default"
+description = "Default Jarlet server template"
+
+[server]
+minecraft_version = "26.2"
+memory = "2G"
+port = 25565
+online_mode = true
 ```
 
 ```bash
-cd src
+cd src/server
 ./start.sh <server-name> --accept-eula --foreground
 ```
 
