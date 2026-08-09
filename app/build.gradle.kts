@@ -106,6 +106,21 @@ sourceSets {
     main {
         kotlin.srcDir(generateVersion.map { generatedVersionDir.get() })
     }
+    // Separate from `test` on purpose: these hit real third-party APIs
+    // (Hangar/Spiget/GitHub/PaperMC), which `test` must never do implicitly
+    // -- agent.md's "no internet without explicit permission" rule. Kept as
+    // its own source set + Test task (below) so plain `./gradlew test`
+    // (and `gradle build`, which depends on `test`) never touches the
+    // network; run these explicitly via `./gradlew integrationTest`.
+    create("integrationTest") {
+        kotlin.srcDir("src/integrationTest/kotlin")
+        compileClasspath += sourceSets.main.get().output
+        runtimeClasspath += sourceSets.main.get().output
+    }
+}
+
+val integrationTestImplementation by configurations.getting {
+    extendsFrom(configurations.testImplementation.get())
 }
 
 repositories {
@@ -123,5 +138,13 @@ dependencies {
 }
 
 tasks.test {
+    useJUnitPlatform()
+}
+
+tasks.register<Test>("integrationTest") {
+    description = "Smoke-tests each source adapter against its real external API (Hangar/Spiget/GitHub/PaperMC). Not run by `test` or `build` -- invoke explicitly."
+    group = "verification"
+    testClassesDirs = sourceSets["integrationTest"].output.classesDirs
+    classpath = sourceSets["integrationTest"].runtimeClasspath
     useJUnitPlatform()
 }
