@@ -122,6 +122,7 @@ trust_domain() {
 #
 # Params: server_dir plugins_dir source id label external_url
 #         expected_hash expected_size fallback_filename trust_requested
+#         [version_name] [channel_name]
 #   - source/id: the declaring adapter's own source/id (e.g. "hangar"/
 #     "Geyser"), used only for the skip/success messages and to namespace
 #     the plugins-state.json entry -- this file has no source-specific
@@ -141,24 +142,42 @@ trust_domain() {
 #     Content-Disposition filename.
 #   - trust_requested: "true"/"false" (string), threaded down from the
 #     --trust CLI flag through route_plugin()/the adapter entry function.
+#   - version_name/channel_name: OPTIONAL. External hosting only ever
+#     means "the bytes live off-adapter" -- it says nothing about whether
+#     the adapter still resolved real version metadata before discovering
+#     that. Hangar is the concrete case: process_hangar_plugin() already
+#     calls /latest?channel=... (or resolves a pin) and fetches the full
+#     version object *before* it ever looks at downloads.PAPER.externalUrl,
+#     so by the time it reaches this function it has a real, comparable
+#     target_version and channel.name -- only the download mechanism
+#     differs (trusted curl instead of the authenticated Hangar download
+#     endpoint), not the versioning. Callers with that context MUST pass it
+#     through here so it lands in plugins-state.json and the adapter's own
+#     "already up to date" check (e.g. hangar.sh's read_installed_version
+#     comparison, which runs before the externalUrl branch is even reached)
+#     works the same for a trusted external download as for any other.
+#     Callers with genuinely no version identity at this point (Spiget's
+#     external branch fires immediately off resource_json, before any
+#     version is resolved -- there is nothing to pass) simply omit these,
+#     and get the literal "external"/null fallback documented at the
+#     write_installed_version() call below.
 #
 # Returns 0 in every case (matches hangar.sh/spiget.sh's existing "skip is
 # not a failure" convention) -- callers should `return $?` straight after
 # calling this, exactly like they already do for the redirect.sh case.
 #
-# No "already installed, skip re-fetch" check is done here on purpose: per
-# the confirmed design, a trust-fetched external file has no reliable
-# version identity to compare against (Geyser's URL is a versionless
-# "latest" path) -- so every explicit `add`/`update` invocation that
-# reaches this function re-downloads and overwrites, never automatically
-# (this function is never called from anything but an explicit CLI
-# invocation's adapter routing). The InstalledVersion record this writes
-# uses version_name: null for the same reason -- see the note above
-# write_installed_version() below.
+# No "already installed, skip re-fetch" check is done here on purpose --
+# that check belongs to (and, for callers that pass real version_name, is
+# already performed by) the calling adapter itself before it ever reaches
+# the externalUrl branch, exactly like hangar.sh's target_version
+# comparison above its externalUrl check. This function only decides
+# whether it's allowed to fetch, and fetches unconditionally once it
+# decides yes.
 handle_untrusted_external_url() {
     local server_dir="$1" plugins_dir="$2" source="$3" id="$4" label="$5"
     local external_url="$6" expected_hash="$7" expected_size="$8"
     local fallback_filename="$9" trust_requested="${10}"
+    local version_name="${11:-external}" channel_name="${12:-}"
 
     local domain
     domain="$(url_domain "$external_url")"
@@ -238,26 +257,29 @@ handle_untrusted_external_url() {
     trap - EXIT INT TERM
     rm -f "$header_file"
 
-    # version_name: the fixed literal "external" (not a null/empty value)
-    # is deliberate -- see this function's doc comment above. It guarantees
-    # read_installed_version() never matches a future target_version an
-    # adapter resolves from its own metadata (e.g. Hangar's channel-latest
-    # label, which can itself be a static string like "Geyser"), so every
-    # explicit invocation that reaches this function always re-downloads
-    # rather than silently short-circuiting on a version identity this file
-    # has no way to trust. A fixed non-null literal (rather than null) also
-    # keeps list.sh's existing `version_name // empty` display showing a
-    # real (if generic) value instead of misreporting an actually-installed
-    # trusted jar as "not installed".
+    # version_name: real version identity when the caller has one to give
+    # (see the version_name/channel_name param doc above -- Hangar's is the
+    # motivating case), otherwise the fixed literal "external" (not a
+    # null/empty value), which is deliberate for callers with no version
+    # context at all: it guarantees read_installed_version() never
+    # coincidentally matches some future value, so a caller with no real
+    # identity to compare against always re-downloads on every explicit
+    # invocation rather than silently short-circuiting on an identity this
+    # file has no way to trust. A fixed non-null literal (rather than null)
+    # also keeps list.sh's existing `version_name // empty` display showing
+    # a real (if generic) value instead of misreporting an actually-
+    # installed trusted jar as "not installed".
     write_installed_version "$server_dir" "$source" "$id" "$(
         jq -n \
             --argjson size "$actual_size" \
             --arg file "$file_name" \
             --arg sha256 "$verified_hash" \
+            --arg version_name "$version_name" \
+            --arg channel_name "$channel_name" \
             '{
-                version_name: "external",
+                version_name: $version_name,
                 version_id: null,
-                channel_name: null,
+                channel_name: (if $channel_name == "" then null else $channel_name end),
                 sha256: (if $sha256 == "" then null else $sha256 end),
                 size: $size,
                 file: $file,

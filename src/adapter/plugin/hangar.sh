@@ -224,13 +224,24 @@ process_hangar_plugin() {
         # externalUrl is set) -- but fileInfo is still read here and passed
         # through in case that ever isn't true for some other project;
         # handle_untrusted_external_url() only uses it if non-empty.
-        local ext_hash ext_size
+        #
+        # target_version/channel are also passed through here (as this
+        # call's version_name/channel_name) -- they were already resolved
+        # above (the target_version-vs-installed check that gates this
+        # whole function runs before externalUrl is even looked at), so
+        # this is real Hangar version identity, not something invented for
+        # the external-hosting case. Only the download mechanism differs
+        # for a trusted external URL, not the versioning -- see
+        # handle_untrusted_external_url()'s param doc in trust.sh.
+        local ext_hash ext_size ext_channel_name
         ext_hash="$(jq -r '.downloads.PAPER.fileInfo.sha256Hash // empty' <<<"$version_json")"
         ext_size="$(jq -r '.downloads.PAPER.fileInfo.sizeBytes // empty' <<<"$version_json")"
+        ext_channel_name="$(jq -r '.channel.name // empty' <<<"$version_json")"
 
         handle_untrusted_external_url \
             "$server_dir" "$plugins_dir" "hangar" "$slug" "$slug" \
-            "$external_url" "$ext_hash" "$ext_size" "$slug.jar" "$trust_requested"
+            "$external_url" "$ext_hash" "$ext_size" "$slug.jar" "$trust_requested" \
+            "$target_version" "$ext_channel_name"
         return $?
     fi
 
