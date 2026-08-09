@@ -3,6 +3,7 @@ package me.devsnox.jarlet.server
 import me.devsnox.jarlet.adapter.server.ServerSoftwareAdapters
 import me.devsnox.jarlet.command.lib.ServerCommandException
 import me.devsnox.jarlet.config.JarletToml
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -90,8 +91,14 @@ internal object ServerSetup {
     fun readToml(path: Path): JarletToml =
         try {
             JarletToml.read(path)
-        } catch (e: Exception) {
-            throw ServerCommandException("Could not parse $path as TOML")
+        } catch (exception: IOException) {
+            throw ServerCommandException(
+                "Could not read $path: ${exception.message}"
+            )
+        } catch (exception: Exception) {
+            throw ServerCommandException(
+                "Could not parse $path as TOML: ${exception.message}"
+            )
         }
 
     /**
