@@ -80,23 +80,28 @@ github_releases_get() {
 # Given a release's assets array (as JSON), applies the deterministic
 # jar-selection filter: prefer plugin-jar-shaped content types, exclude
 # known non-plugin name patterns (sources/javadoc jars, checksum/signature
-# files, changelogs/text files). If exactly one candidate survives, prints
-# it as JSON. If more than one survives (e.g. a core plugin plus optional
+# files, changelogs/text files). If exactly one candidate survives, that's
+# the pick. If more than one survives (e.g. a core plugin plus optional
 # addon jars in the same release, as with EssentialsX), picks the one with
 # the highest value of the GITHUB_ASSET_TIEBREAK_FIELD asset field
 # (jarlet-sys.conf, default "download_count" -- GitHub's per-asset
 # popularity counter) as a deterministic tie-break, on the assumption that
-# the most-downloaded jar is the main/core artifact. Prints nothing and
-# returns 1 only when zero candidates survive the filter -- the sole case
-# still treated as "no usable asset found". Also sets
-# GITHUB_ASSET_CANDIDATE_COUNT to the number of candidates that survived
-# the filter (before the tie-break), so the caller can tell a clean single
-# match apart from a resolved tie without re-running the filter itself.
+# the most-downloaded jar is the main/core artifact.
+#
+# Prints a single JSON object on stdout: {"count": <n>, "asset": <picked
+# asset object, or null if n is 0>} -- both the candidate count and the
+# picked asset travel back to the caller through this one stdout stream.
+# Always returns 0; the caller distinguishes "no usable asset found" by
+# checking whether .count == 0 (equivalently .asset == null), not by exit
+# status. (Deliberately NOT a side-channel global set alongside a captured
+# stdout value: this function's result is captured via "$(...)", which
+# forks a subshell, so any plain variable assignment made inside it -- e.g.
+# a bare GITHUB_ASSET_CANDIDATE_COUNT=... -- would be discarded when the
+# subshell exits and would never reach the caller's environment. Route ALL
+# return data through stdout instead.)
 github_releases_pick_asset() {
     local assets_json="$1"
-    local candidates count
-
-    GITHUB_ASSET_CANDIDATE_COUNT=0
+    local candidates
 
     candidates="$(
         jq -c '
@@ -120,15 +125,9 @@ github_releases_pick_asset() {
         ' <<<"$assets_json"
     )"
 
-    count="$(jq 'length' <<<"$candidates")"
-    GITHUB_ASSET_CANDIDATE_COUNT="$count"
-
-    if [[ "$count" == "0" ]]; then
-        return 1
-    fi
-
-    jq -c --arg field "$GITHUB_ASSET_TIEBREAK_FIELD" 'max_by(.[$field])' <<<"$candidates"
-    return 0
+    jq -c --arg field "$GITHUB_ASSET_TIEBREAK_FIELD" \
+        '{count: length, asset: (max_by(.[$field]) // null)}' \
+        <<<"$candidates"
 }
 
 # Recognizes GitHub repo/release URLs -- the ADAPTER_URL_MATCHER this
@@ -241,16 +240,20 @@ process_github_releases_plugin() {
         return 0
     fi
 
-    local assets_json asset_json
+    local assets_json pick_result count asset_json
     assets_json="$(jq -c '.assets // []' <<<"$release_json")"
 
-    if ! asset_json="$(github_releases_pick_asset "$assets_json")"; then
+    pick_result="$(github_releases_pick_asset "$assets_json")"
+    count="$(jq -r '.count' <<<"$pick_result")"
+    asset_json="$(jq -c '.asset' <<<"$pick_result")"
+
+    if [[ "$count" == "0" || "$asset_json" == "null" ]]; then
         printf 'Skipping "%s" %s: no asset in this release looks like a plugin jar; install manually\n' \
             "$id" "$tag_name"
         return 0
     fi
 
-    if [[ "$GITHUB_ASSET_CANDIDATE_COUNT" -gt 1 ]]; then
+    if [[ "$count" -gt 1 ]]; then
         local picked_name picked_tiebreak_value
         picked_name="$(jq -r '.name' <<<"$asset_json")"
         picked_tiebreak_value="$(jq -r --arg field "$GITHUB_ASSET_TIEBREAK_FIELD" '.[$field]' <<<"$asset_json")"
