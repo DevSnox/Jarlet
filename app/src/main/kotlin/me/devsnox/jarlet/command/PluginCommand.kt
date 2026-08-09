@@ -1,8 +1,9 @@
-package me.devsnox.jarlet.plugin
+package me.devsnox.jarlet.command
 
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.core.subcommands
+import me.devsnox.jarlet.plugin.AddCommand
 
 /**
  * Clikt group command housing the plugin subsystem's subcommands --
@@ -10,7 +11,7 @@ import com.github.ajalt.clikt.core.subcommands
  * dispatch, reshaped into Clikt's idiomatic `jarlet plugin <subcommand>
  * <name> [...]` command-then-argument order rather than a line-by-line
  * port of bash's `jarlet plugin <name> <subcommand>`. [ListCommand]
- * established this shape (phase 3); [AddCommand]/[RemoveCommand]/
+ * established this shape (phase 3); [me.devsnox.jarlet.plugin.AddCommand]/[RemoveCommand]/
  * [UpdateCommand] (phase 5, `src/plugin/commands.sh` + the dispatch part of
  * `plugin.sh`) follow it for consistency -- each resolves its own server
  * path/`jarlet.toml` directly (via [me.devsnox.jarlet.server.ServerPaths])

@@ -1,6 +1,7 @@
 package me.devsnox.jarlet.server
 
 import me.devsnox.jarlet.adapter.server.ServerSoftwareAdapters
+import me.devsnox.jarlet.command.lib.ServerCommandException
 import me.devsnox.jarlet.config.JarletToml
 import java.nio.file.Files
 import java.nio.file.Path
@@ -8,8 +9,8 @@ import java.nio.file.Paths
 
 /**
  * Core "materialize a server instance directory from a template" logic --
- * ported from `src/server/setup.sh`, factored out of [SetupCommand] so
- * [StartCommand] can call it directly for its auto-setup-if-missing
+ * ported from `src/server/setup.sh`, factored out of [me.devsnox.jarlet.command.SetupCommand] so
+ * [me.devsnox.jarlet.command.StartCommand] can call it directly for its auto-setup-if-missing
  * fallback (`start.sh` shells out to `setup.sh` for the same reason; this
  * is the in-process Kotlin equivalent).
  */

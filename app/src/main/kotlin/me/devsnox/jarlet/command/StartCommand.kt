@@ -1,4 +1,4 @@
-package me.devsnox.jarlet.server
+package me.devsnox.jarlet.command
 
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.Context
@@ -8,7 +8,11 @@ import com.github.ajalt.clikt.parameters.arguments.optional
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import me.devsnox.jarlet.adapter.server.ServerSoftwareAdapters
+import me.devsnox.jarlet.command.lib.ServerCommandException
+import me.devsnox.jarlet.command.lib.serverCommandBody
 import me.devsnox.jarlet.config.SysConfig
+import me.devsnox.jarlet.server.ServerPaths
+import me.devsnox.jarlet.server.ServerSetup
 import java.io.File
 import java.nio.file.Files
 
@@ -16,7 +20,7 @@ import java.nio.file.Files
  * `jarlet start <name> [template-file] [--foreground] [--accept-eula]` --
  * Kotlin port of `src/server/start.sh`.
  *
- * Sets the instance up first (via [ServerSetup.ensure]) if it doesn't
+ * Sets the instance up first (via [me.devsnox.jarlet.server.ServerSetup.ensure]) if it doesn't
  * already exist, same as `start.sh` shelling out to `setup.sh`. Foreground
  * mode approximates bash's `exec java ...` (which replaces the shell
  * process) by running the JVM child to completion and exiting this process
@@ -56,7 +60,7 @@ class StartCommand : CliktCommand(name = "start") {
 
         val eulaFile = serverDir.resolve("eula.txt")
         val eulaAccepted = Files.isRegularFile(eulaFile) &&
-            Files.readAllLines(eulaFile).any { it == "eula=true" }
+                Files.readAllLines(eulaFile).any { it == "eula=true" }
         if (!eulaAccepted) {
             if (!acceptEula) {
                 throw ServerCommandException(

@@ -5,11 +5,12 @@ import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
+import me.devsnox.jarlet.command.lib.resolvePluginCommandContext
 import java.nio.file.Files
 import me.devsnox.jarlet.config.JarletToml
 import me.devsnox.jarlet.config.write
-import me.devsnox.jarlet.server.ServerCommandException
-import me.devsnox.jarlet.server.serverCommandBody
+import me.devsnox.jarlet.command.lib.ServerCommandException
+import me.devsnox.jarlet.command.lib.serverCommandBody
 
 /**
  * `jarlet plugin add <name> <identifier> [--pin <version> | --channel <name>] [--source <hangar|spiget|github-releases>] [--trust]`

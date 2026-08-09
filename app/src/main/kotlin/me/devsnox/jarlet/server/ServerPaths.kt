@@ -1,5 +1,6 @@
 package me.devsnox.jarlet.server
 
+import me.devsnox.jarlet.command.lib.ServerCommandException
 import me.devsnox.jarlet.config.SysConfig
 import java.nio.file.Path
 import java.nio.file.Paths

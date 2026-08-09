@@ -1,4 +1,4 @@
-package me.devsnox.jarlet.plugin
+package me.devsnox.jarlet.command
 
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.Context
@@ -8,11 +8,15 @@ import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.int
+import com.github.ajalt.mordant.table.ColumnWidth
 import com.github.ajalt.mordant.table.table
+import me.devsnox.jarlet.command.lib.ServerCommandException
+import me.devsnox.jarlet.command.lib.resolvePluginCommandContext
+import me.devsnox.jarlet.command.lib.serverCommandBody
 import me.devsnox.jarlet.config.JarletToml
 import me.devsnox.jarlet.config.SysConfig
-import me.devsnox.jarlet.server.ServerCommandException
-import me.devsnox.jarlet.server.serverCommandBody
+import me.devsnox.jarlet.plugin.AdapterRegistry
+import me.devsnox.jarlet.plugin.PluginStateStore
 
 /**
  * `jarlet plugin list <name> [--page <n> | --all]` -- Kotlin port of
@@ -20,7 +24,7 @@ import me.devsnox.jarlet.server.serverCommandBody
  *
  * Combines the DECLARED `[[plugins]]` entries from a server's
  * `jarlet.toml` ([JarletToml.plugins]) with the INSTALLED state recorded
- * in `plugins-state.json` ([PluginStateStore.readAll]) into one merged,
+ * in `plugins-state.json` ([me.devsnox.jarlet.plugin.PluginStateStore.readAll]) into one merged,
  * paginated view, rendered as a Mordant table instead of `list.sh`'s
  * plain `printf` lines.
  *
@@ -94,6 +98,16 @@ class ListCommand : CliktCommand(name = "list") {
         }
 
         val rendered = table {
+            // Columns default to expanding proportionally to the detected
+            // terminal width; under GraalVM native-image (no real tty),
+            // that detection can come back as 0, collapsing every column
+            // to zero-width content while still drawing full borders. Auto
+            // sizes each column to its own content instead, independent of
+            // terminal-width detection.
+            column(0) { width = ColumnWidth.Auto }
+            column(1) { width = ColumnWidth.Auto }
+            column(2) { width = ColumnWidth.Auto }
+            column(3) { width = ColumnWidth.Auto }
             header {
                 row("ID", "Source", "Version", "Policy")
             }

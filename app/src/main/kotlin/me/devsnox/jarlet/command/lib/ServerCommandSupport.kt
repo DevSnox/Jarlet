@@ -1,4 +1,4 @@
-package me.devsnox.jarlet.server
+package me.devsnox.jarlet.command.lib
 
 import com.github.ajalt.clikt.core.CliktError
 

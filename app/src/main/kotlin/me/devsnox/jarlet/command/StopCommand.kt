@@ -1,9 +1,12 @@
-package me.devsnox.jarlet.server
+package me.devsnox.jarlet.command
 
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.parameters.arguments.argument
+import me.devsnox.jarlet.command.lib.ServerCommandException
+import me.devsnox.jarlet.command.lib.serverCommandBody
 import me.devsnox.jarlet.config.SysConfig
+import me.devsnox.jarlet.server.ServerPaths
 import java.nio.file.Files
 
 /**
@@ -12,7 +15,7 @@ import java.nio.file.Files
  * Unlike the bash version (which deliberately keeps its own inline
  * `fail()`/`config_value()`/`sys_config_value()`/`servers_root()` copies
  * rather than sourcing `lib.sh`, since it has no TOML-config dependency of
- * its own), this reuses [ServerPaths]/[SysConfig] directly -- there's no
+ * its own), this reuses [me.devsnox.jarlet.server.ServerPaths]/[SysConfig] directly -- there's no
  * equivalent reason to duplicate that logic in Kotlin.
  */
 class StopCommand : CliktCommand(name = "stop") {

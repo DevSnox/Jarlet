@@ -1,4 +1,4 @@
-package me.devsnox.jarlet.plugin
+package me.devsnox.jarlet.command
 
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.Context
@@ -6,10 +6,10 @@ import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.optional
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
+import me.devsnox.jarlet.command.lib.resolvePluginCommandContext
+import me.devsnox.jarlet.command.lib.serverCommandBody
 import java.nio.file.Files
-import me.devsnox.jarlet.config.JarletToml
-import me.devsnox.jarlet.server.ServerCommandException
-import me.devsnox.jarlet.server.serverCommandBody
+import me.devsnox.jarlet.plugin.PluginRouter
 
 /**
  * `jarlet plugin update <name> [<identifier>] [--trust]` -- Kotlin port of
@@ -18,14 +18,14 @@ import me.devsnox.jarlet.server.serverCommandBody
  * doc comments.
  *
  * With no `identifier`, updates every plugin declared in the server's
- * `jarlet.toml` ([PluginRouter.routeAll]) -- the Kotlin equivalent of both
+ * `jarlet.toml` ([me.devsnox.jarlet.plugin.PluginRouter.routeAll]) -- the Kotlin equivalent of both
  * `update` with no target *and* bash's bare `plugins.sh <name>` (no
  * subcommand at all) default, which this subcommand-first CLI shape folds
  * into one explicit form; see [PluginCommand]'s doc comment for why the
  * bare-invocation shortcut itself isn't reproduced.
  *
  * With an `identifier`, updates exactly that one declared plugin
- * ([PluginRouter.routeOne]), resolved against the declared entries by id
+ * ([me.devsnox.jarlet.plugin.PluginRouter.routeOne]), resolved against the declared entries by id
  * alone (source is not needed as CLI input -- ids are globally unique per
  * server).
  *
@@ -35,8 +35,8 @@ import me.devsnox.jarlet.server.serverCommandBody
  * (it's not positional), so there's no bespoke arg-loop needed here the
  * way bash's hand-rolled `while (( $# > 0 ))` required.
  *
- * Fully wired against [PluginRouter.routeAll]/[PluginRouter.routeOne] and
- * [AdapterRegistry]'s three registered adapters.
+ * Fully wired against [me.devsnox.jarlet.plugin.PluginRouter.routeAll]/[me.devsnox.jarlet.plugin.PluginRouter.routeOne] and
+ * [me.devsnox.jarlet.plugin.AdapterRegistry]'s three registered adapters.
  */
 class UpdateCommand : CliktCommand(name = "update") {
 

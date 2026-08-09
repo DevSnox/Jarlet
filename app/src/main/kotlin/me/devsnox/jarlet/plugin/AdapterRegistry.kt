@@ -41,7 +41,7 @@ object AdapterRegistry {
     fun all(): Collection<PluginSourceAdapter> = adaptersBySource.values
 
     /**
-     * Cosmetic-only accessor used by [me.devsnox.jarlet.plugin.ListCommand]
+     * Cosmetic-only accessor used by [me.devsnox.jarlet.command.ListCommand]
      * to print a human-readable name instead of the raw internal source
      * string. Kotlin equivalent of `router.sh`'s `adapter_display_name()`
      * -- falls back to the raw [source] string itself if no adapter is
