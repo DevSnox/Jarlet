@@ -26,7 +26,6 @@ graalvmNative {
             imageName.set("jarlet")
             mainClass.set("me.devsnox.jarlet.MainKt")
             buildArgs.add("--no-fallback")
-            buildArgs.add("-H:+BuildReport") // TEMP: baseline measurement, will revert after
             javaLauncher.set(
                 javaToolchains.launcherFor {
                     languageVersion.set(JavaLanguageVersion.of(25))
@@ -45,6 +44,43 @@ graalvmNative {
             // ".*/Resource0.txt$" -- a root file's name is just
             // "jarlet.toml", never "/jarlet.toml"), so these patterns must
             // not anchor one either.
+            resources {
+                includedPatterns.add("^jarlet-sys\\.conf$")
+                includedPatterns.add("^${Regex.escape(templateFilename)}$")
+            }
+        }
+        // Dev-only, additive alongside "main" -- never used for release
+        // artifacts. Invoke explicitly with `./gradlew nativeQuickCompile`;
+        // output lands at build/native/nativeQuickCompile/jarlet-quick
+        // (plugin derives both the task name and output dir from the
+        // binary name "quick", separate from nativeCompile's "main"
+        // output, so the two never collide or overwrite each other).
+        //
+        // Measured on this machine (Apple Silicon, 6 cores/8GB RAM,
+        // GraalVM Oracle 25.0.4) via `time ./gradlew clean nativeCompile`
+        // vs `time ./gradlew clean nativeQuickCompile`, both from a clean
+        // build:
+        //   release (nativeCompile):      2m 53s wall, 41.86MB binary
+        //   quick   (nativeQuickCompile):  <filled in after re-measure>
+        // quickBuild trades the release build's -O2 method compilation
+        // (the "Compiling methods" phase, ~78s / ~49% of the release
+        // build's native-image time per -H:+BuildReport) for a much
+        // cheaper -O0 pass, at the cost of a larger, slower-*running*
+        // binary -- acceptable for local dev iteration, not for what we
+        // ship.
+        create("quick") {
+            imageName.set("jarlet-quick")
+            mainClass.set("me.devsnox.jarlet.MainKt")
+            quickBuild.set(true)
+            buildArgs.add("--no-fallback")
+            javaLauncher.set(
+                javaToolchains.launcherFor {
+                    languageVersion.set(JavaLanguageVersion.of(25))
+                }
+            )
+            // Same resource registration as "main" above -- required for
+            // every binary independently, the plugin does not share this
+            // config between named binaries.
             resources {
                 includedPatterns.add("^jarlet-sys\\.conf$")
                 includedPatterns.add("^${Regex.escape(templateFilename)}$")
