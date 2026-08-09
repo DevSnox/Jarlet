@@ -22,20 +22,16 @@ internal object ServerSetup {
 
     /**
      * Creates the instance directory for [name] from the template at
-     * [templateFileArgument] (defaulting to [ServerPaths.templateFilename]
-     * in the current directory), installing the server jar and writing
-     * `eula.txt`/`server.properties` defaults if they don't already exist.
-     * Fails if a server named [name] already exists.
+     * [templateFileArgument] (defaulting to the bundled default template
+     * -- see [resolveConfigPath] -- when not given), installing the server
+     * jar and writing `eula.txt`/`server.properties` defaults if they don't
+     * already exist. Fails if a server named [name] already exists.
      */
     fun ensure(name: String, templateFileArgument: String?): Result {
         ServerPaths.validateName(name)
 
         val templateName = ServerPaths.templateFilename()
-        val configPath = resolvePath(templateFileArgument ?: templateName)
-
-        if (!Files.isRegularFile(configPath)) {
-            throw ServerCommandException("$configPath does not exist")
-        }
+        val configPath = resolveConfigPath(templateFileArgument, templateName)
 
         val serverDir = ServerPaths.serverDir(name)
         if (Files.exists(serverDir)) {
@@ -97,6 +93,47 @@ internal object ServerSetup {
         } catch (e: Exception) {
             throw ServerCommandException("Could not parse $path as TOML")
         }
+
+    /**
+     * Resolves the template to use: an explicit [templateFileArgument] if
+     * given (must exist), else the bundled default template
+     * ([extractBundledDefaultTemplate]) -- so `jarlet setup <name>` with no
+     * argument always still has a template to work from, per [templateName]
+     * (`TEMPLATE_FILENAME` in `jarlet-sys.conf`) naming the bundled resource
+     * to fall back to.
+     */
+    private fun resolveConfigPath(templateFileArgument: String?, templateName: String): Path {
+        if (templateFileArgument != null) {
+            val explicit = resolvePath(templateFileArgument)
+            if (!Files.isRegularFile(explicit)) {
+                throw ServerCommandException("$explicit does not exist")
+            }
+            return explicit
+        }
+
+        return extractBundledDefaultTemplate(templateName)
+    }
+
+    /**
+     * Copies the bundled `/$templateName` classpath resource (see
+     * `app/src/main/resources/jarlet.toml`, registered for the native image
+     * via `app/build.gradle.kts`'s `graalvmNative.binaries.main.resources`)
+     * out to a temp file, since the rest of this flow (parsing, and the
+     * final byte-for-byte copy into the new server directory) works off a
+     * real [Path], not a resource stream.
+     */
+    private fun extractBundledDefaultTemplate(templateName: String): Path {
+        val resourcePath = "/$templateName"
+        val bytes = ServerSetup::class.java.getResourceAsStream(resourcePath)?.readBytes()
+            ?: throw ServerCommandException("Bundled default template resource $resourcePath is missing")
+
+        val tempFile = Files.createTempFile("jarlet-default-template-", ".toml")
+        tempFile.toFile().deleteOnExit()
+        Files.write(tempFile, bytes)
+
+        println("No template file given -- using the bundled default $templateName template")
+        return tempFile
+    }
 
     /** Mirrors `resolve_path()`: resolves to an absolute path, failing if its parent directory doesn't exist. */
     private fun resolvePath(path: String): Path {

@@ -9,6 +9,16 @@ application {
     mainClass.set("me.devsnox.jarlet.MainKt")
 }
 
+// jarlet-sys.conf is the single source of truth for TEMPLATE_FILENAME
+// (currently "jarlet.toml", see ServerPaths.templateFilename()) -- read it
+// here too instead of a second hardcoded literal, so the native-image
+// resource pattern below can't silently drift from the runtime filename.
+val templateFilename = file("src/main/resources/jarlet-sys.conf")
+    .readLines()
+    .firstOrNull { it.startsWith("TEMPLATE_FILENAME=") }
+    ?.substringAfter("=")
+    ?: throw GradleException("TEMPLATE_FILENAME missing from src/main/resources/jarlet-sys.conf")
+
 graalvmNative {
     toolchainDetection.set(true)
     binaries {
@@ -21,6 +31,18 @@ graalvmNative {
                     languageVersion.set(JavaLanguageVersion.of(25))
                 }
             )
+            // Classpath resources aren't bundled into a native image unless
+            // explicitly registered -- SysConfig.default() (jarlet-sys.conf)
+            // reads its bundled file via getResourceAsStream at runtime, so
+            // without this it would resolve fine on the JVM but be silently
+            // missing from the native binary. jarlet.toml is registered
+            // alongside it for the same reason once something reads it as a
+            // bundled resource. Both files live flat under
+            // app/src/main/resources/, matched here by exact root filename.
+            resources {
+                includedPatterns.add("^/jarlet-sys\\.conf$")
+                includedPatterns.add("^/${Regex.escape(templateFilename)}$")
+            }
         }
     }
 }
