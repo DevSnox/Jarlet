@@ -71,6 +71,28 @@ toml_to_json() {
     dasel -i toml -o json --compact --root < "$1"
 }
 
+# Converts a JSON document (read from stdin) back to TOML text on stdout.
+# Used by plugins.sh's add/remove subcommands to persist a mutated
+# jarlet.toml.
+#
+# dasel v3.11.2 has no "put"/"delete" mutation command (only `query` exists
+# -- confirmed via `dasel --help`), and its query language has no array
+# append/delete function either (both are v1/v2-only and error with
+# "unknown function" on this version). So add/remove build the new document
+# by decoding the whole file to JSON via toml_to_json(), mutating the
+# resulting structure with jq (already a hard dependency), and re-encoding
+# the *entire* document back to TOML with this function.
+#
+# IMPORTANT: this is a full, lossy rewrite. dasel's TOML writer does not
+# round-trip comments or preserve key order/quoting style -- confirmed by
+# testing against a scratch copy of jarlet.toml, where the header comment
+# block was dropped and keys were alphabetized on write. This is an
+# accepted, known tradeoff for add/remove; update never calls this function
+# and so never touches jarlet.toml at all.
+json_to_toml() {
+    dasel -i json -o toml --root
+}
+
 # Fails with a clear message unless both TOML-parsing tools are available.
 require_toml_tools() {
     command -v dasel >/dev/null ||

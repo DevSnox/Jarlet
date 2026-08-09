@@ -1,18 +1,20 @@
 # Hangar plugin source adapter.
 #
-# Sourced (not exec'd) into plugins.sh's process by main()'s dispatch loop,
+# Sourced (not exec'd) into plugins.sh's process by dispatch_plugin(),
 # lazily and only once, the first time a declared plugin entry has
-# source = "hangar". This keeps HANGAR_JWT process/env-scoped without
-# inventing an inter-process protocol for passing auth state back, and
-# avoids resolving HANGAR_API or requiring curl/shasum for templates that
-# declare zero hangar plugins.
+# source = "hangar" -- whether that dispatch came from the update-all loop,
+# a targeted `update <source> <id>`, or add's immediate post-declare fetch.
+# This keeps HANGAR_JWT process/env-scoped without inventing an
+# inter-process protocol for passing auth state back, and avoids resolving
+# HANGAR_API or requiring curl/shasum for templates that declare zero
+# hangar plugins.
 #
 # Contract for future source adapters (spiget.sh, github-releases.sh):
 #   - Entry point: a function process_<source>_plugin(server_dir,
 #     plugins_dir, id, policy_json), called from an explicit
 #     `case "$source" in hangar) ... ;; spiget) ... ;; esac` in plugins.sh's
-#     main(). Explicit per-source function names + an explicit case
-#     statement, not a naming-convention-based dispatch.
+#     dispatch_plugin(). Explicit per-source function names + an explicit
+#     case statement, not a naming-convention-based dispatch.
 #   - May assume plugins.sh has already defined: fail(), config_value(),
 #     sys_config_value(), $SCRIPT_DIR, $USER_AGENT, plugin_state_file(),
 #     read_installed_version(), write_installed_version(), and that jq/dasel
