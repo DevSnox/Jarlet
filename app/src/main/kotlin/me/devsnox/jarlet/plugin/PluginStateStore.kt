@@ -33,6 +33,18 @@ data class InstalledVersion(
     val size: Long? = null,
     val file: String,
     val external: Boolean = false,
+    /**
+     * Human-readable resource name, cached at install/update time for
+     * sources whose declared [id] is not itself human-readable (Spiget's
+     * `id` is a bare numeric resource id -- unlike Hangar/GitHub-releases,
+     * whose declared id already IS a readable slug/name, so they never
+     * populate this). Null for every other source, and null for Spiget
+     * entries written before this field existed. See
+     * [me.devsnox.jarlet.command.ListCommand]'s use of it to avoid
+     * `jarlet plugin list` showing raw numeric ids with no indication of
+     * what the plugin actually is.
+     */
+    @SerialName("display_name") val displayName: String? = null,
 )
 
 /**

@@ -301,6 +301,14 @@ object SpigetAdapter : PluginSourceAdapter {
                     size = download.size,
                     file = fileName,
                     external = false,
+                    // Cached so `jarlet plugin list` can show the real
+                    // plugin name instead of the bare numeric resource id
+                    // -- no extra API call, `name` is already part of the
+                    // resource response fetched above. Left null (not
+                    // defaulted to `id`, unlike `label` above) when Spiget
+                    // reports no name, so ListCommand can fall back to
+                    // showing the bare id instead of a redundant "id (id)".
+                    displayName = name?.takeIf { it.isNotEmpty() },
                 ),
             )
         } finally {

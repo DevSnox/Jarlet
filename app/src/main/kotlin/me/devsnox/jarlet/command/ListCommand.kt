@@ -67,15 +67,31 @@ class ListCommand : CliktCommand(name = "list") {
                 // time), but matching loosely here avoids silently
                 // showing a plugin as "not installed" if that ever drifts.
                 val i = installed.firstOrNull { it.source == d.source && it.id.equals(d.id, ignoreCase = true) }
+                // Spiget's declared id is a bare numeric resource id (unlike
+                // Hangar/GitHub-releases, whose id is already a readable
+                // slug/name) -- once the plugin has actually been
+                // installed/updated at least once, SpigetAdapter caches the
+                // real resource name in the installed-state record
+                // (i.displayName). Prefer that, keeping the id alongside for
+                // disambiguation/scripting, same as e.g. github-releases'
+                // "owner/repo" id already provides. Declared-but-never-
+                // installed Spiget plugins have no state record yet, so
+                // they still fall back to the bare id here -- expected, not
+                // a bug (see PluginStateStore.InstalledVersion.displayName).
+                val idDisplay = i?.displayName?.let { "$it (${d.id})" } ?: d.id
                 MergedRow(
-                    id = d.id,
+                    id = idDisplay,
+                    sortId = d.id,
                     source = d.source,
                     sourceDisplay = AdapterRegistry.displayName(d.source),
                     versionName = i?.versionName,
                     policyDisplay = policyDisplay(d.policy),
                 )
             }
-            .sortedWith(compareBy({ it.source }, { it.id }))
+            // Sorted by the raw declared id (not the display string above)
+            // so caching a Spiget name doesn't reshuffle row order versus
+            // today's behavior.
+            .sortedWith(compareBy({ it.source }, { it.sortId }))
 
         if (merged.isEmpty()) {
             echo("No plugins declared")
@@ -135,6 +151,7 @@ class ListCommand : CliktCommand(name = "list") {
 
     private data class MergedRow(
         val id: String,
+        val sortId: String,
         val source: String,
         val sourceDisplay: String,
         val versionName: String?,
