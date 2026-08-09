@@ -12,7 +12,13 @@
 #   - May assume plugins.sh has already defined: fail(), config_value(),
 #     sys_config_value(), $SCRIPT_DIR, $USER_AGENT, plugin_state_file(),
 #     read_installed_version(), write_installed_version() (all from
-#     store.sh), and that jq/dasel are already confirmed to be on PATH.
+#     store.sh), route_plugin() (router.sh), and try_resolve_external_url()/
+#     persist_external_redirect() (redirect.sh) -- the last two are what the
+#     external-hosting gate below uses to redirect to another adapter when
+#     Spiget's file.externalUrl is recognizable (currently: GitHub release
+#     URLs, via github-releases.sh's ADAPTER_URL_MATCHER; see redirect.sh's
+#     header for the full mechanism) -- and that jq/dasel are already
+#     confirmed to be on PATH.
 #   - Must check its own dependencies (curl) at source time.
 #
 # Spiget (https://api.spiget.org/v2) needs no API key/auth (confirmed live
@@ -170,7 +176,29 @@ process_spiget_plugin() {
     resource_unit="$(jq -r '.file.sizeUnit // empty' <<<"$resource_json")"
 
     if [[ "$external" == "true" ]]; then
-        printf 'Skipping "%s" (%s): resource is hosted externally, install manually\n' "${name:-$id}" "$id"
+        # Before giving up: Spiget's resource-level file.externalUrl
+        # (confirmed live, e.g. EssentialsX/9089 -> a GitHub release URL)
+        # sometimes points at a source Jarlet already has a working adapter
+        # for -- try_resolve_external_url() (redirect.sh) recognizes those
+        # and, on a match, persist_external_redirect() rewrites this
+        # entry's jarlet.toml declaration to the resolved source/id once,
+        # then route_plugin() actually fetches it. See redirect.sh's header
+        # for the full mechanism; only github-releases.sh's URLs are
+        # recognized as of this writing.
+        local external_url
+        external_url="$(jq -r '.file.externalUrl // empty' <<<"$resource_json")"
+
+        if [[ -n "$external_url" ]] && try_resolve_external_url "$external_url"; then
+            printf '"%s" (%s) is hosted externally at %s -- redirecting to %s (%s)\n' \
+                "${name:-$id}" "$id" "$external_url" "$REDIRECT_ID" "$REDIRECT_SOURCE"
+
+            persist_external_redirect "$server_dir" "spiget" "$id" "$REDIRECT_SOURCE" "$REDIRECT_ID" "$REDIRECT_POLICY_JSON"
+            route_plugin "$server_dir" "$plugins_dir" "$REDIRECT_SOURCE" "$REDIRECT_ID" "$REDIRECT_POLICY_JSON"
+            return $?
+        fi
+
+        printf 'Skipping "%s" (%s): resource is hosted externally, install manually%s\n' \
+            "${name:-$id}" "$id" "${external_url:+ ($external_url)}"
         return 0
     fi
 

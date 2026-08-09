@@ -24,12 +24,20 @@
 #   - May assume plugins.sh has already defined: fail(), config_value(),
 #     sys_config_value(), $SCRIPT_DIR, $USER_AGENT, plugin_state_file(),
 #     read_installed_version(), write_installed_version() (all from
-#     store.sh), and that jq/dasel are already confirmed to be on PATH.
+#     store.sh), route_plugin() (router.sh), and try_resolve_external_url()/
+#     persist_external_redirect() (redirect.sh), and that jq/dasel are
+#     already confirmed to be on PATH.
 #   - Must check any dependencies of its own (curl, shasum, ...) at source
 #     time, before ADAPTER_SOURCE_NAME/ADAPTER_ENTRY_FUNCTION are set;
 #     plugins.sh does not check them unconditionally on its behalf.
 #   - Must keep any credentials/tokens process/env-scoped only, never
 #     written to disk — see HANGAR_JWT below.
+#   - Optionally, if this source's URLs are ever something another
+#     adapter's external-hosting gate might recognize, may also set
+#     ADAPTER_URL_MATCHER to a function(url) that sets MATCHED_ID/
+#     MATCHED_POLICY_JSON and returns 0 on a match, 1 otherwise -- see
+#     redirect.sh's header and github-releases.sh's
+#     github_releases_match_url() for the one adapter that does this today.
 
 command -v curl >/dev/null || fail "curl is required for the hangar source"
 command -v shasum >/dev/null || fail "shasum is required for the hangar source"
@@ -183,6 +191,25 @@ process_hangar_plugin() {
     external_url="$(jq -r '.downloads.PAPER.externalUrl // empty' <<<"$version_json")"
 
     if [[ -n "$external_url" ]]; then
+        # Before giving up: try_resolve_external_url() (redirect.sh) may
+        # recognize this URL as pointing at a source Jarlet already has a
+        # working adapter for -- see spiget.sh's identical gate for the
+        # concrete case this was built from (Spiget's externalUrl pointing
+        # at a GitHub release) and redirect.sh's header for the full
+        # mechanism. No live evidence was found of a Hangar externalUrl
+        # ever pointing at Spiget/SpigotMC specifically, so only GitHub
+        # URLs are recognized as of this writing -- if that ever changes,
+        # it's a github-releases.sh (or a new adapter)'s ADAPTER_URL_MATCHER
+        # to add, not something to special-case here.
+        if try_resolve_external_url "$external_url"; then
+            printf '"%s" %s is hosted externally at %s -- redirecting to %s (%s)\n' \
+                "$slug" "$target_version" "$external_url" "$REDIRECT_ID" "$REDIRECT_SOURCE"
+
+            persist_external_redirect "$server_dir" "hangar" "$slug" "$REDIRECT_SOURCE" "$REDIRECT_ID" "$REDIRECT_POLICY_JSON"
+            route_plugin "$server_dir" "$plugins_dir" "$REDIRECT_SOURCE" "$REDIRECT_ID" "$REDIRECT_POLICY_JSON"
+            return $?
+        fi
+
         printf 'Skipping "%s" %s: hosted externally, install manually: %s\n' \
             "$slug" "$target_version" "$external_url"
         return 0

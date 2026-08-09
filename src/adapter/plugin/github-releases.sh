@@ -115,6 +115,43 @@ github_releases_pick_asset() {
     return 1
 }
 
+# Recognizes GitHub repo/release URLs -- the ADAPTER_URL_MATCHER this
+# adapter declares (see router.sh's header and redirect.sh for the generic
+# mechanism this plugs into), used when another source's external-hosting
+# gate (spiget.sh, hangar.sh) finds an externalUrl pointing here instead of
+# just skipping. Confirmed live: Spiget's EssentialsX resource (id 9089)
+# reports `file.externalUrl:
+# https://github.com/EssentialsX/Essentials/releases/tag/2.22.0`.
+#
+# Recognizes, with or without a trailing slash, http:// or https://
+# (www.github.com is never used by GitHub itself, so not matched):
+#   github.com/{owner}/{repo}
+#   github.com/{owner}/{repo}/releases/tag/{tag}
+#
+# On a match, sets MATCHED_ID="{owner}/{repo}" and MATCHED_POLICY_JSON to
+# {"pin": "{tag}"} for a .../releases/tag/{tag} URL (an explicit version was
+# named), or {} (track latest -- process_github_releases_plugin() only ever
+# reads .pin from policy_json, so an empty object already means "latest")
+# otherwise, and returns 0. Returns 1 (clearing both) on no match.
+github_releases_match_url() {
+    local url="$1"
+    MATCHED_ID="" MATCHED_POLICY_JSON=""
+
+    if [[ "$url" =~ ^https?://github\.com/([0-9A-Za-z._-]+)/([0-9A-Za-z._-]+)/releases/tag/([^/[:space:]]+)/?$ ]]; then
+        MATCHED_ID="${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+        MATCHED_POLICY_JSON="$(jq -n --arg pin "${BASH_REMATCH[3]}" '{pin: $pin}')"
+        return 0
+    fi
+
+    if [[ "$url" =~ ^https?://github\.com/([0-9A-Za-z._-]+)/([0-9A-Za-z._-]+)/?$ ]]; then
+        MATCHED_ID="${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+        MATCHED_POLICY_JSON='{}'
+        return 0
+    fi
+
+    return 1
+}
+
 process_github_releases_plugin() {
     local server_dir="$1" plugins_dir="$2" id="$3" policy_json="$4"
 
@@ -268,3 +305,6 @@ process_github_releases_plugin() {
 # ../plugin/hangar.sh's header for the full adapter contract.
 ADAPTER_SOURCE_NAME=github-releases
 ADAPTER_ENTRY_FUNCTION=process_github_releases_plugin
+# Optional -- see router.sh's header and redirect.sh -- lets another
+# source's external-hosting gate recognize a URL as pointing here.
+ADAPTER_URL_MATCHER=github_releases_match_url
