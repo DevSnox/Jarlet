@@ -21,7 +21,7 @@ import kotlin.test.assertNull
  */
 class PluginYamlReaderTest {
 
-    private val tempFiles = mutableListOf<Path>()
+    private var tempFiles = mutableListOf<Path>()
 
     @AfterTest
     fun cleanup() {
@@ -30,7 +30,7 @@ class PluginYamlReaderTest {
 
     private fun jarWithPluginYaml(yaml: String?, entryName: String = "plugin.yml"): Path {
         val path = Files.createTempFile("jarlet-test-", ".jar")
-        tempFiles += path
+        tempFiles += path.toMutableList()
         ZipOutputStream(Files.newOutputStream(path)).use { zip ->
             if (yaml != null) {
                 zip.putNextEntry(ZipEntry(entryName))
@@ -180,7 +180,7 @@ class PluginYamlReaderTest {
     @Test
     fun `returns null for a corrupt non-zip file at the jar path without throwing`() {
         val path = Files.createTempFile("jarlet-corrupt-", ".jar")
-        tempFiles += path
+        tempFiles += path.toMutableList()
         Files.write(path, "not actually a zip file".toByteArray(Charsets.UTF_8))
 
         assertNull(PluginYamlReader.read(path))
