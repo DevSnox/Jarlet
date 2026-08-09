@@ -10,19 +10,29 @@
 # declare zero hangar plugins.
 #
 # Contract for future source adapters (spiget.sh, github-releases.sh):
-#   - Entry point: a function process_<source>_plugin(server_dir,
-#     plugins_dir, id, policy_json), called from an explicit
-#     `case "$source" in hangar) ... ;; spiget) ... ;; esac` in router.sh's
-#     route_plugin(). Explicit per-source function names + an explicit
-#     case statement, not a naming-convention-based dispatch.
+#   - Self-describing, not hard-typed: when sourced, a source adapter MUST
+#     set ADAPTER_SOURCE_NAME to its own source name (must match the
+#     filename minus .sh -- router.sh sanity-checks this against the
+#     `source` value it loaded the file for) and ADAPTER_ENTRY_FUNCTION to
+#     the name of its entry point function. router.sh calls that function
+#     dynamically; it contains no source-specific string literals of its
+#     own, so file name = source name is the only convention it relies on.
+#   - Entry point signature: process_<source>_plugin(server_dir,
+#     plugins_dir, id, policy_json) -- the name itself is arbitrary (it's
+#     read back from ADAPTER_ENTRY_FUNCTION), but keep this shape for
+#     readability/consistency with existing adapters.
 #   - May assume plugins.sh has already defined: fail(), config_value(),
 #     sys_config_value(), $SCRIPT_DIR, $USER_AGENT, plugin_state_file(),
 #     read_installed_version(), write_installed_version() (all from
 #     store.sh), and that jq/dasel are already confirmed to be on PATH.
-#   - Must check any dependencies of its own (curl, shasum, ...) before use;
+#   - Must check any dependencies of its own (curl, shasum, ...) at source
+#     time, before ADAPTER_SOURCE_NAME/ADAPTER_ENTRY_FUNCTION are set;
 #     plugins.sh does not check them unconditionally on its behalf.
 #   - Must keep any credentials/tokens process/env-scoped only, never
 #     written to disk — see HANGAR_JWT below.
+
+command -v curl >/dev/null || fail "curl is required for the hangar source"
+command -v shasum >/dev/null || fail "shasum is required for the hangar source"
 
 readonly HANGAR_API="$(sys_config_value HANGAR_API)"
 
@@ -251,3 +261,7 @@ process_hangar_plugin() {
     printf 'Installed %s %s as %s\n' "$slug" "$target_version" "$target"
     printf 'SHA-256: %s\n' "$expected_hash"
 }
+
+# Self-description read back by router.sh -- see the contract note above.
+ADAPTER_SOURCE_NAME=hangar
+ADAPTER_ENTRY_FUNCTION=process_hangar_plugin

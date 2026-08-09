@@ -8,15 +8,32 @@
 # "process every declared plugin" / "process one declared plugin" loops
 # that walk plugins_json and call route_plugin() for each entry.
 #
+# Adapter discovery/dispatch is self-describing, not hard-typed: the
+# `source` field of a declared entry names a file, ../source/plugin/<source>.sh,
+# which is lazily sourced on first use. That file must, when sourced,
+# set two variables -- ADAPTER_SOURCE_NAME (echoed back for a sanity check
+# that the file actually serves the source it was loaded for) and
+# ADAPTER_ENTRY_FUNCTION (the name of its entry-point function, called
+# dynamically). This file contains zero source-specific string literals;
+# see ../source/plugin/hangar.sh's header for the full adapter contract.
+#
 # May assume plugin.sh has already defined: fail(), SCRIPT_DIR, and that
 # store.sh has already been sourced (route_plugin() is called by add too,
 # which relies on store.sh's write_toml_file() having already run).
 
-# Set the first time a "hangar" entry is routed, so
-# ../source/plugin/hangar.sh is sourced (and its deps checked) lazily and
-# only once per invocation, no matter how many entries route through it or
-# which subcommand (add/remove/update) triggered the routing.
-HANGAR_LOADED=0
+# Maps a loaded source name to its adapter's entry-point function, so a
+# source is sourced (and its own deps checked) lazily and only once per
+# invocation, no matter how many entries route through it or which
+# subcommand (add/remove/update) triggered the routing.
+#
+# Bash 3.2 (macOS's default /usr/bin/bash, since Apple stopped bundling
+# GPLv3 bash) has no associative arrays, so this is tracked via
+# dynamically-named plain variables (indirect expansion, bash 2.x+, and
+# printf -v, bash 3.1+) instead of `declare -A`. Do not reintroduce
+# `declare -A` here -- it breaks on any user still on the system bash.
+adapter_loaded_var() {
+    printf 'ADAPTER_LOADED_%s' "${1//-/_}"
+}
 
 # Routes a single declared entry (source/id/policy_json) to its source
 # adapter. Shared by the update-all loop, a targeted `update <source> <id>`,
@@ -25,21 +42,34 @@ HANGAR_LOADED=0
 route_plugin() {
     local server_dir="$1" plugins_dir="$2" source="$3" id="$4" policy_json="$5"
 
-    case "$source" in
-        hangar)
-            if (( ! HANGAR_LOADED )); then
-                command -v curl >/dev/null || fail "curl is required for the hangar source"
-                command -v shasum >/dev/null || fail "shasum is required for the hangar source"
-                # shellcheck source=../source/plugin/hangar.sh
-                . "$SCRIPT_DIR/../source/plugin/hangar.sh"
-                HANGAR_LOADED=1
-            fi
-            process_hangar_plugin "$server_dir" "$plugins_dir" "$id" "$policy_json"
-            ;;
-        *)
-            printf 'Skipping "%s" (%s): only the hangar source is implemented\n' "$id" "$source"
-            ;;
-    esac
+    local adapter_file="$SCRIPT_DIR/../source/plugin/$source.sh"
+
+    if [[ ! -f "$adapter_file" ]]; then
+        printf 'Skipping "%s" (%s): no adapter is implemented for this source\n' "$id" "$source"
+        return 0
+    fi
+
+    local loaded_var
+    loaded_var="$(adapter_loaded_var "$source")"
+
+    if [[ -z "${!loaded_var:-}" ]]; then
+        local ADAPTER_SOURCE_NAME="" ADAPTER_ENTRY_FUNCTION=""
+        # shellcheck source=/dev/null
+        . "$adapter_file"
+
+        [[ "$ADAPTER_SOURCE_NAME" == "$source" ]] ||
+            fail "Adapter '$adapter_file' declares ADAPTER_SOURCE_NAME='$ADAPTER_SOURCE_NAME', expected '$source'"
+
+        [[ -n "$ADAPTER_ENTRY_FUNCTION" ]] ||
+            fail "Adapter '$adapter_file' did not set ADAPTER_ENTRY_FUNCTION"
+
+        declare -F "$ADAPTER_ENTRY_FUNCTION" >/dev/null ||
+            fail "Adapter '$adapter_file' declares ADAPTER_ENTRY_FUNCTION='$ADAPTER_ENTRY_FUNCTION' but that function is not defined"
+
+        printf -v "$loaded_var" '%s' "$ADAPTER_ENTRY_FUNCTION"
+    fi
+
+    "${!loaded_var}" "$server_dir" "$plugins_dir" "$id" "$policy_json"
 }
 
 # Runs the identify->check-version->update flow for every declared plugin.

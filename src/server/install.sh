@@ -22,26 +22,50 @@ readonly JARLET_VERSION
 readonly USER_AGENT="${PROJECT_NAME}/${JARLET_VERSION} (${REPO_URL})"
 
 # Routes to a server-software source adapter under ../source/server/,
-# lazily and only once per invocation -- mirrors plugin.sh's
-# dispatch_plugin() shape (explicit case, explicit per-package entry-point
-# function, lazy load-on-first-use), so a second server-software package
-# later is a small addition, not a rewrite.
+# lazily and only once per invocation -- mirrors plugin/router.sh's
+# route_plugin() shape (self-describing adapters, dynamic dispatch, lazy
+# load-on-first-use, zero package-specific string literals here), so a
+# second server-software package later is a small addition, not a rewrite.
+# See ../source/server/paper.sh's header for the full adapter contract.
+#
+# Bash 3.2 (macOS's default /usr/bin/bash, since Apple stopped bundling
+# GPLv3 bash) has no associative arrays, so loaded adapters are tracked
+# via dynamically-named plain variables (indirect expansion, bash 2.x+,
+# and printf -v, bash 3.1+) instead of `declare -A`. Do not reintroduce
+# `declare -A` here -- it breaks on any user still on the system bash.
+adapter_loaded_var() {
+    printf 'ADAPTER_LOADED_%s' "${1//-/_}"
+}
+
 dispatch_install() {
     local package="$1" minecraft_version="$2" target="$3"
 
-    case "$package" in
-        paper)
-            command -v curl >/dev/null || fail "curl is required for the paper package"
-            command -v jq >/dev/null || fail "jq is required for the paper package"
-            command -v shasum >/dev/null || fail "shasum is required for the paper package"
-            # shellcheck source=../source/server/paper.sh
-            . "$SCRIPT_DIR/../source/server/paper.sh"
-            install_paper_server "$minecraft_version" "$target"
-            ;;
-        *)
-            fail "Unknown [server].package '$package'; only 'paper' is implemented"
-            ;;
-    esac
+    local adapter_file="$SCRIPT_DIR/../source/server/$package.sh"
+
+    [[ -f "$adapter_file" ]] ||
+        fail "Unknown [server].package '$package'; no adapter is implemented for this package"
+
+    local loaded_var
+    loaded_var="$(adapter_loaded_var "$package")"
+
+    if [[ -z "${!loaded_var:-}" ]]; then
+        local ADAPTER_SOURCE_NAME="" ADAPTER_ENTRY_FUNCTION=""
+        # shellcheck source=/dev/null
+        . "$adapter_file"
+
+        [[ "$ADAPTER_SOURCE_NAME" == "$package" ]] ||
+            fail "Adapter '$adapter_file' declares ADAPTER_SOURCE_NAME='$ADAPTER_SOURCE_NAME', expected '$package'"
+
+        [[ -n "$ADAPTER_ENTRY_FUNCTION" ]] ||
+            fail "Adapter '$adapter_file' did not set ADAPTER_ENTRY_FUNCTION"
+
+        declare -F "$ADAPTER_ENTRY_FUNCTION" >/dev/null ||
+            fail "Adapter '$adapter_file' declares ADAPTER_ENTRY_FUNCTION='$ADAPTER_ENTRY_FUNCTION' but that function is not defined"
+
+        printf -v "$loaded_var" '%s' "$ADAPTER_ENTRY_FUNCTION"
+    fi
+
+    "${!loaded_var}" "$minecraft_version" "$target"
 }
 
 main() {

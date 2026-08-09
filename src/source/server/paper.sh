@@ -3,21 +3,32 @@
 # Sourced (not exec'd) into install.sh's process by its dispatcher,
 # lazily and only once, the first time [server].package resolves to
 # "paper" -- currently the only legal value, but structured the same way
-# plugins.sh's dispatch_plugin() already routes to per-source adapters
-# (see src/source/plugin/hangar.sh) so a second server-software adapter
-# later is a small addition, not a rewrite.
+# plugin.sh's router.sh routes to per-source adapters (see
+# src/source/plugin/hangar.sh) so a second server-software adapter later
+# is a small addition, not a rewrite.
 #
 # Contract for future server-software adapters (e.g. a hypothetical
-# purpur.sh, folia.sh):
-#   - Entry point: a function install_<package>_server(minecraft_version,
-#     target), called from an explicit
-#     `case "$package" in paper) ... ;; *) fail ... ;; esac` in install.sh's
-#     dispatcher. Explicit per-package function names + an explicit case
-#     statement, not a naming-convention-based dispatch.
+# purpur.sh, folia.sh) -- mirrors src/source/plugin/hangar.sh's contract:
+#   - Self-describing, not hard-typed: when sourced, an adapter MUST set
+#     ADAPTER_SOURCE_NAME to its own package name (must match the filename
+#     minus .sh -- install.sh's dispatcher sanity-checks this against the
+#     `package` value it loaded the file for) and ADAPTER_ENTRY_FUNCTION
+#     to the name of its entry point function. The dispatcher calls that
+#     function dynamically and contains no package-specific string
+#     literals of its own; file name = package name is the only
+#     convention it relies on.
+#   - Entry point signature: install_<package>_server(minecraft_version,
+#     target) -- the name itself is arbitrary (it's read back from
+#     ADAPTER_ENTRY_FUNCTION), but keep this shape for readability.
 #   - May assume install.sh has already defined: fail(), sys_config_value(),
 #     $SCRIPT_DIR, $USER_AGENT.
-#   - Must check any dependencies of its own (curl, jq, shasum, ...) before
-#     use; install.sh does not check them unconditionally on its behalf.
+#   - Must check any dependencies of its own (curl, jq, shasum, ...) at
+#     source time, before ADAPTER_SOURCE_NAME/ADAPTER_ENTRY_FUNCTION are
+#     set; install.sh does not check them unconditionally on its behalf.
+
+command -v curl >/dev/null || fail "curl is required for the paper package"
+command -v jq >/dev/null || fail "jq is required for the paper package"
+command -v shasum >/dev/null || fail "shasum is required for the paper package"
 
 readonly PAPER_API="$(sys_config_value PAPER_API)"
 
@@ -122,3 +133,8 @@ install_paper_server() {
     printf 'Installed %s as %s\n' "$name" "$target"
     printf 'SHA-256: %s\n' "$expected_hash"
 }
+
+# Self-description read back by install.sh's dispatcher -- see the
+# contract note above.
+ADAPTER_SOURCE_NAME=paper
+ADAPTER_ENTRY_FUNCTION=install_paper_server
