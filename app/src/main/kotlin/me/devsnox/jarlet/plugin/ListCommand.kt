@@ -9,11 +9,9 @@ import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.int
 import com.github.ajalt.mordant.table.table
-import java.nio.file.Files
 import me.devsnox.jarlet.config.JarletToml
 import me.devsnox.jarlet.config.SysConfig
 import me.devsnox.jarlet.server.ServerCommandException
-import me.devsnox.jarlet.server.ServerPaths
 import me.devsnox.jarlet.server.serverCommandBody
 
 /**
@@ -25,17 +23,6 @@ import me.devsnox.jarlet.server.serverCommandBody
  * in `plugins-state.json` ([PluginStateStore.readAll]) into one merged,
  * paginated view, rendered as a Mordant table instead of `list.sh`'s
  * plain `printf` lines.
- *
- * IMPORTANT: this command reads declared plugins via [JarletToml.read],
- * which -- as of this phase -- is in a known-broken state: it still
- * imports `com.akuleshov7.ktoml.Toml`, a dependency no longer declared in
- * `app/build.gradle.kts` (the project moved to `tomlj`/`snakeyaml-engine`
- * without updating that file). This command is written against
- * [JarletToml]'s stable data-class shape, not against whichever TOML
- * library backs [JarletToml.read] -- so the declared-plugins side of
- * `list` will not actually run until [JarletToml.read] is fixed to use a
- * real, declared dependency. See this phase's report for the full note;
- * fixing `JarletToml.kt` itself is out of this phase's scope.
  *
  * Unlike `plugin.sh`'s single dispatcher (which resolves the server
  * directory/toml file/plugins JSON once in `main()` and threads them into
@@ -63,27 +50,8 @@ class ListCommand : CliktCommand(name = "list") {
             throw ServerCommandException("--page must be a positive integer")
         }
 
-        // ServerPaths.serverDir() also validates `name` (the same
-        // ^[0-9A-Za-z._-]+$ rule list.sh's caller, plugin.sh's main(),
-        // applies) -- reused from the server-lifecycle phase rather than
-        // duplicated here, since it's shared, non-lifecycle-specific
-        // plumbing (server name/path resolution), not a lifecycle command
-        // itself.
-        val serverDir = ServerPaths.serverDir(name)
-        if (!Files.isDirectory(serverDir)) {
-            throw ServerCommandException("No server named '$name' found at $serverDir")
-        }
-
-        val tomlFile = serverDir.resolve(ServerPaths.templateFilename())
-        if (!Files.isRegularFile(tomlFile)) {
-            throw ServerCommandException("$tomlFile does not exist. Run setup (or start) for '$name' first to generate it.")
-        }
-
-        val declared = try {
-            JarletToml.read(tomlFile).plugins
-        } catch (e: Exception) {
-            throw ServerCommandException("Could not parse $tomlFile as TOML: ${e.message}")
-        }
+        val (serverDir, _, toml) = resolvePluginCommandContext(name)
+        val declared = toml.plugins
 
         val installed = PluginStateStore.readAll(serverDir)
 

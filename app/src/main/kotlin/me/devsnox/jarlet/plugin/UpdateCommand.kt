@@ -9,7 +9,6 @@ import com.github.ajalt.clikt.parameters.options.option
 import java.nio.file.Files
 import me.devsnox.jarlet.config.JarletToml
 import me.devsnox.jarlet.server.ServerCommandException
-import me.devsnox.jarlet.server.ServerPaths
 import me.devsnox.jarlet.server.serverCommandBody
 
 /**
@@ -36,18 +35,8 @@ import me.devsnox.jarlet.server.serverCommandBody
  * (it's not positional), so there's no bespoke arg-loop needed here the
  * way bash's hand-rolled `while (( $# > 0 ))` required.
  *
- * ## Integration status
- *
- * Wired against [PluginRouter.routeAll]/[PluginRouter.routeOne], which are
- * real and already landed (phase 3) -- this compiles and the control flow
- * (declared-plugins lookup, --trust threading, all-vs-one dispatch) is
- * exercised for real, reading a working [JarletToml] (see [AddCommand]'s
- * doc comment for that history). What it drives is still a no-op in
- * practice until phase 4's adapters register with [AdapterRegistry]: with
- * none registered yet, every entry currently prints [PluginRouter.route]'s
- * documented "no adapter is implemented for this source" skip message
- * rather than actually checking for/fetching an update -- expected,
- * non-error behavior, not a bug in this command.
+ * Fully wired against [PluginRouter.routeAll]/[PluginRouter.routeOne] and
+ * [AdapterRegistry]'s three registered adapters.
  */
 class UpdateCommand : CliktCommand(name = "update") {
 
@@ -60,21 +49,7 @@ class UpdateCommand : CliktCommand(name = "update") {
         .flag(default = false)
 
     override fun run() = serverCommandBody {
-        val serverDir = ServerPaths.serverDir(name)
-        if (!Files.isDirectory(serverDir)) {
-            throw ServerCommandException("No server named '$name' found at $serverDir")
-        }
-
-        val tomlFile = serverDir.resolve(ServerPaths.templateFilename())
-        if (!Files.isRegularFile(tomlFile)) {
-            throw ServerCommandException("$tomlFile does not exist. Run setup (or start) for '$name' first to generate it.")
-        }
-
-        val toml = try {
-            JarletToml.read(tomlFile)
-        } catch (e: Exception) {
-            throw ServerCommandException("Could not parse $tomlFile as TOML: ${e.message}")
-        }
+        val (serverDir, _, toml) = resolvePluginCommandContext(name)
 
         val pluginsDir = serverDir.resolve("plugins")
         Files.createDirectories(pluginsDir)

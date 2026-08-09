@@ -9,7 +9,6 @@ import java.nio.file.Files
 import me.devsnox.jarlet.config.JarletToml
 import me.devsnox.jarlet.config.write
 import me.devsnox.jarlet.server.ServerCommandException
-import me.devsnox.jarlet.server.ServerPaths
 import me.devsnox.jarlet.server.serverCommandBody
 
 /**
@@ -31,23 +30,9 @@ import me.devsnox.jarlet.server.serverCommandBody
  * -- matching `cmd_add()`'s documented "declare, then act" order exactly:
  * a failed fetch still leaves the plugin declared in `jarlet.toml`.
  *
- * ## Integration status
- *
- * Fully wired against what exists in this tree as of this port:
- * [SourceResolver] (HTTP-based Hangar/Spiget probing, no adapter
- * dependency), [JarletToml] (read/mutate/write -- its own `ktoml` vs.
- * `tomlj` backend churn resolved concurrently with this phase, so `add`'s
- * declare-then-fetch flow should genuinely round-trip `jarlet.toml`
- * today), and [PluginRouter.route] (phase 3, already landed).
- * [PluginRouter.route] itself is a real, working router -- but
- * [AdapterRegistry] has, as of this port, zero adapters registered
- * (`GithubReleasesAdapter` exists in the tree but isn't wired into
- * [AdapterRegistry]'s map yet; `HangarAdapter`/`SpigetAdapter` don't exist
- * yet at all), so today every `add` will declare successfully in
- * `jarlet.toml` and then print `Skipping "<id>" (<source>): no adapter is
- * implemented for this source` instead of actually fetching a jar --
- * exactly the router's documented, non-error behavior for an unregistered
- * source, not a bug in this command.
+ * Fully wired end-to-end: [SourceResolver], [JarletToml] (tomlj-backed
+ * read/mutate/write), and [PluginRouter.route] against [AdapterRegistry]'s
+ * three registered adapters (hangar, github-releases, spiget).
  */
 class AddCommand : CliktCommand(name = "add") {
 
@@ -73,21 +58,7 @@ class AddCommand : CliktCommand(name = "add") {
             throw ServerCommandException("--pin and --channel are mutually exclusive")
         }
 
-        val serverDir = ServerPaths.serverDir(name)
-        if (!Files.isDirectory(serverDir)) {
-            throw ServerCommandException("No server named '$name' found at $serverDir")
-        }
-
-        val tomlFile = serverDir.resolve(ServerPaths.templateFilename())
-        if (!Files.isRegularFile(tomlFile)) {
-            throw ServerCommandException("$tomlFile does not exist. Run setup (or start) for '$name' first to generate it.")
-        }
-
-        val toml = try {
-            JarletToml.read(tomlFile)
-        } catch (e: Exception) {
-            throw ServerCommandException("Could not parse $tomlFile as TOML: ${e.message}")
-        }
+        val (serverDir, tomlFile, toml) = resolvePluginCommandContext(name)
 
         val pluginsDir = serverDir.resolve("plugins")
         Files.createDirectories(pluginsDir)
