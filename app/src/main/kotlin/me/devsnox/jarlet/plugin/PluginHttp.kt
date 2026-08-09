@@ -162,10 +162,70 @@ object PluginHttp {
             throw IOException("Request interrupted", e)
         }
 
-    /** Extracts a `filename` from a `Content-Disposition` header value, or `null` if absent/unparseable. */
+    /**
+     * Extracts a `filename` from a `Content-Disposition` header value, or
+     * `null` if absent/unparseable. Prefers the RFC 5987 `filename*=`
+     * extended parameter (`charset'lang'percent-encoded-value`) over the
+     * plain `filename=` one, per RFC 6266, decoding whichever is found --
+     * a raw, undecoded value is not safe to write to disk as-is. Also
+     * decodes an RFC 2047 MIME encoded-word (`=?charset?Q|B?...?=`) inside
+     * a plain `filename=`, since at least one real adapter (GeyserMC's
+     * download endpoint) wraps a plain-ASCII filename in one even though
+     * it's neither required nor valid per the HTTP spec -- observed live as
+     * `filename="=?UTF-8?Q?Geyser-Spigot.jar?="`, which without decoding
+     * became the literal on-disk filename.
+     */
     private fun contentDispositionFileName(header: String?): String? {
         if (header.isNullOrEmpty()) return null
-        val match = Regex("""filename\*?=["']?([^"';]+)["']?""", RegexOption.IGNORE_CASE).find(header)
-        return match?.groupValues?.get(1)?.trim()
+
+        val extended = Regex("""filename\*=([^"';]+)""", RegexOption.IGNORE_CASE).find(header)
+        if (extended != null) {
+            return decodeRfc5987(extended.groupValues[1].trim())
+        }
+
+        val plain = Regex("""filename=["']?([^"';]+)["']?""", RegexOption.IGNORE_CASE).find(header)
+        return plain?.groupValues?.get(1)?.trim()?.let { decodeRfc2047(it) }
+    }
+
+    /** Decodes an RFC 5987 `charset'lang'percent-encoded-value` extended parameter value. */
+    private fun decodeRfc5987(value: String): String? {
+        val parts = value.split("'", limit = 3)
+        if (parts.size != 3) return value
+        val (charset, _, encoded) = parts
+        return try {
+            java.net.URLDecoder.decode(encoded, charset.ifBlank { "UTF-8" })
+        } catch (e: Exception) {
+            encoded
+        }
+    }
+
+    /** Decodes an RFC 2047 MIME encoded-word (`=?charset?Q?...?=` or `=?charset?B?...?=`); returns [value] unchanged if it isn't one. */
+    private fun decodeRfc2047(value: String): String {
+        val match = Regex("""^=\?([^?]+)\?([QqBb])\?([^?]*)\?=$""").find(value) ?: return value
+        val (charset, encoding, encoded) = match.destructured
+        return try {
+            when (encoding.uppercase()) {
+                "B" -> String(java.util.Base64.getDecoder().decode(encoded), charset(charset))
+                "Q" -> {
+                    val bytes = java.io.ByteArrayOutputStream()
+                    var i = 0
+                    while (i < encoded.length) {
+                        val c = encoded[i]
+                        when (c) {
+                            '_' -> { bytes.write(' '.code); i++ }
+                            '=' -> {
+                                bytes.write(encoded.substring(i + 1, i + 3).toInt(16))
+                                i += 3
+                            }
+                            else -> { bytes.write(c.code); i++ }
+                        }
+                    }
+                    String(bytes.toByteArray(), charset(charset))
+                }
+                else -> value
+            }
+        } catch (e: Exception) {
+            value
+        }
     }
 }
