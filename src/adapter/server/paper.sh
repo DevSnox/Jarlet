@@ -4,11 +4,11 @@
 # lazily and only once, the first time [server].package resolves to
 # "paper" -- currently the only legal value, but structured the same way
 # plugin.sh's router.sh routes to per-source adapters (see
-# src/source/plugin/hangar.sh) so a second server-software adapter later
+# src/adapter/plugin/hangar.sh) so a second server-software adapter later
 # is a small addition, not a rewrite.
 #
 # Contract for future server-software adapters (e.g. a hypothetical
-# purpur.sh, folia.sh) -- mirrors src/source/plugin/hangar.sh's contract:
+# purpur.sh, folia.sh) -- mirrors src/adapter/plugin/hangar.sh's contract:
 #   - Self-describing, not hard-typed: when sourced, an adapter MUST set
 #     ADAPTER_SOURCE_NAME to its own package name (must match the filename
 #     minus .sh -- install.sh's dispatcher sanity-checks this against the

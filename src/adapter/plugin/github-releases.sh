@@ -121,23 +121,46 @@ github_releases_pick_asset() {
 # gate (spiget.sh, hangar.sh) finds an externalUrl pointing here instead of
 # just skipping. Confirmed live: Spiget's EssentialsX resource (id 9089)
 # reports `file.externalUrl:
-# https://github.com/EssentialsX/Essentials/releases/tag/2.22.0`.
+# https://github.com/EssentialsX/Essentials/releases/tag/2.22.0`. Hangar's
+# Plan-Player-Analytics resource reports `externalUrl:
+# https://github.com/plan-player-analytics/Plan/releases/download/5.8.3579/Plan-5.8-build-3579.jar`
+# -- a direct asset-download URL rather than a release-page URL; this is
+# GitHub's standard, stable asset URL shape (confirmed live against
+# ViaVersion's, EssentialsX's, and Plan's actual releases via the GitHub
+# API's `browser_download_url` field), so it gets its own branch below.
 #
 # Recognizes, with or without a trailing slash, http:// or https://
 # (www.github.com is never used by GitHub itself, so not matched):
 #   github.com/{owner}/{repo}
 #   github.com/{owner}/{repo}/releases/tag/{tag}
+#   github.com/{owner}/{repo}/releases/download/{tag}/{asset-filename}
 #
 # On a match, sets MATCHED_ID="{owner}/{repo}" and MATCHED_POLICY_JSON to
-# {"pin": "{tag}"} for a .../releases/tag/{tag} URL (an explicit version was
-# named), or {} (track latest -- process_github_releases_plugin() only ever
-# reads .pin from policy_json, so an empty object already means "latest")
-# otherwise, and returns 0. Returns 1 (clearing both) on no match.
+# {"pin": "{tag}"} for a .../releases/tag/{tag} or .../releases/download/
+# {tag}/{asset} URL (an explicit version was named either way -- the asset
+# filename itself is not parsed or trusted; process_github_releases_plugin()
+# re-fetches the release by tag and re-runs its own asset selection), or {}
+# (track latest -- process_github_releases_plugin() only ever reads .pin
+# from policy_json, so an empty object already means "latest") otherwise,
+# and returns 0. Returns 1 (clearing both) on no match.
+#
+# Like the /releases/tag/{tag} branch, {tag} is matched with
+# [^/[:space:]]+ and so does not handle a git tag name that itself contains
+# a literal "/" (git allows this, e.g. "v1/2.0") -- not observed in any
+# real plugin release checked so far (ViaVersion, EssentialsX, Plan all use
+# plain dotted version tags), and pre-existing behavior for the release-tag
+# branch, not a regression introduced here.
 github_releases_match_url() {
     local url="$1"
     MATCHED_ID="" MATCHED_POLICY_JSON=""
 
     if [[ "$url" =~ ^https?://github\.com/([0-9A-Za-z._-]+)/([0-9A-Za-z._-]+)/releases/tag/([^/[:space:]]+)/?$ ]]; then
+        MATCHED_ID="${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+        MATCHED_POLICY_JSON="$(jq -n --arg pin "${BASH_REMATCH[3]}" '{pin: $pin}')"
+        return 0
+    fi
+
+    if [[ "$url" =~ ^https?://github\.com/([0-9A-Za-z._-]+)/([0-9A-Za-z._-]+)/releases/download/([^/[:space:]]+)/([^/[:space:]]+)/?$ ]]; then
         MATCHED_ID="${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
         MATCHED_POLICY_JSON="$(jq -n --arg pin "${BASH_REMATCH[3]}" '{pin: $pin}')"
         return 0
