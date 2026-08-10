@@ -51,6 +51,9 @@ jobs:
         run: |
           ./gradlew \
             --no-daemon \
+            --console=plain \
+            --stacktrace \
+            --info \
             -Dorg.gradle.java.installations.paths="$JAVA_HOME" \
             clean \
             :app:test \
