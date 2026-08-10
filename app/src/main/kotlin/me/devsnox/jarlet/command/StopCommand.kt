@@ -1,6 +1,6 @@
 package me.devsnox.jarlet.command
 
-import com.github.ajalt.clikt.core.CliktCommand
+import me.devsnox.jarlet.command.lib.JarletCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.parameters.arguments.argument
 import me.devsnox.jarlet.Log
@@ -19,7 +19,7 @@ import java.nio.file.Files
  * its own), this reuses [me.devsnox.jarlet.server.ServerPaths]/[SysConfig] directly -- there's no
  * equivalent reason to duplicate that logic in Kotlin.
  */
-class StopCommand : CliktCommand(name = "stop") {
+class StopCommand : JarletCommand(name = "stop") {
     override fun help(context: Context) = "Stop a running server instance."
 
     private val name: String by argument(name = "name")

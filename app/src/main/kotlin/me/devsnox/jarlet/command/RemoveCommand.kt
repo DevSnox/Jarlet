@@ -1,6 +1,6 @@
 package me.devsnox.jarlet.command
 
-import com.github.ajalt.clikt.core.CliktCommand
+import me.devsnox.jarlet.command.lib.JarletCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.parameters.arguments.argument
 import me.devsnox.jarlet.Log
@@ -39,7 +39,7 @@ import me.devsnox.jarlet.plugin.SourceResolver
  * read/write path is on a working `tomlj`-backed implementation as of this
  * port (see [AddCommand]'s doc comment for that history).
  */
-class RemoveCommand : CliktCommand(name = "remove") {
+class RemoveCommand : JarletCommand(name = "remove") {
 
     override fun help(context: Context) = "Undeclare a plugin and delete its installed jar."
 

@@ -1,6 +1,6 @@
 package me.devsnox.jarlet.command
 
-import com.github.ajalt.clikt.core.CliktCommand
+import me.devsnox.jarlet.command.lib.JarletCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.core.ProgramResult
 import com.github.ajalt.clikt.parameters.arguments.argument
@@ -28,7 +28,7 @@ import java.nio.file.Files
  * with the same status code -- the JVM has no true process-image-replace
  * primitive, so this is the closest equivalent.
  */
-class StartCommand : CliktCommand(name = "start") {
+class StartCommand : JarletCommand(name = "start") {
     override fun help(context: Context) = "Start a server instance, setting it up first if needed."
 
     private val name: String by argument(name = "name")

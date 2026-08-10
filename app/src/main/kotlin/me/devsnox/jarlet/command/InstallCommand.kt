@@ -1,6 +1,6 @@
 package me.devsnox.jarlet.command
 
-import com.github.ajalt.clikt.core.CliktCommand
+import me.devsnox.jarlet.command.lib.JarletCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.default
@@ -18,7 +18,7 @@ import java.nio.file.Paths
  * than shelling out to this command the way `setup.sh`/`start.sh` invoke
  * `install.sh` as a subprocess.
  */
-class InstallCommand : CliktCommand(name = "install") {
+class InstallCommand : JarletCommand(name = "install") {
     override fun help(context: Context) = "Download and verify a server-software package."
 
     private val minecraftVersion: String by argument(name = "minecraft-version")

@@ -1,6 +1,6 @@
 package me.devsnox.jarlet.command
 
-import com.github.ajalt.clikt.core.CliktCommand
+import me.devsnox.jarlet.command.lib.JarletCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.core.terminal
 import com.github.ajalt.clikt.parameters.arguments.argument
@@ -37,7 +37,7 @@ import me.devsnox.jarlet.plugin.PluginStateStore
  * [PluginCommand]'s header for why each subcommand (this one, and
  * `add`/`remove`/`update`) does its own resolution instead.
  */
-class ListCommand : CliktCommand(name = "list") {
+class ListCommand : JarletCommand(name = "list") {
 
     override fun help(context: Context) = "List plugins declared for a server, merged with their installed state."
 

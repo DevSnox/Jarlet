@@ -1,6 +1,6 @@
 package me.devsnox.jarlet.command
 
-import com.github.ajalt.clikt.core.CliktCommand
+import me.devsnox.jarlet.command.lib.JarletCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.optional
@@ -15,7 +15,7 @@ import me.devsnox.jarlet.server.ServerSetup
  * template; the actual work lives in [me.devsnox.jarlet.server.ServerSetup.ensure] so [StartCommand]
  * can reuse it for its own auto-setup-if-missing fallback.
  */
-class SetupCommand : CliktCommand(name = "setup") {
+class SetupCommand : JarletCommand(name = "setup") {
     override fun help(context: Context) = "Create a new server instance from a template."
 
     private val name: String by argument(name = "name")

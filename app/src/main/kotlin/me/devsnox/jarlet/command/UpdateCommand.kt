@@ -1,6 +1,6 @@
 package me.devsnox.jarlet.command
 
-import com.github.ajalt.clikt.core.CliktCommand
+import me.devsnox.jarlet.command.lib.JarletCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.optional
@@ -41,7 +41,7 @@ import me.devsnox.jarlet.plugin.SourceResolver
  * Fully wired against [me.devsnox.jarlet.plugin.PluginRouter.routeAll]/[me.devsnox.jarlet.plugin.PluginRouter.routeOne] and
  * [me.devsnox.jarlet.plugin.AdapterRegistry]'s three registered adapters.
  */
-class UpdateCommand : CliktCommand(name = "update") {
+class UpdateCommand : JarletCommand(name = "update") {
 
     override fun help(context: Context) = "Fetch the latest matching version for one or all declared plugins."
 

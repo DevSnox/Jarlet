@@ -1,6 +1,6 @@
 package me.devsnox.jarlet.command
 
-import com.github.ajalt.clikt.core.CliktCommand
+import me.devsnox.jarlet.command.lib.JarletCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.core.subcommands
 
@@ -27,7 +27,7 @@ import com.github.ajalt.clikt.core.subcommands
  * This group itself has no behavior of its own (mirrors `plugin.sh`'s
  * `main()`, which is pure dispatch once past its shared setup).
  */
-class PluginCommand : CliktCommand(name = "plugin") {
+class PluginCommand : JarletCommand(name = "plugin") {
     init {
         subcommands(ListCommand(), AddCommand(), RemoveCommand(), UpdateCommand())
     }

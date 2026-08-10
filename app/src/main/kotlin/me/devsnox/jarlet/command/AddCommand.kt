@@ -1,6 +1,6 @@
 package me.devsnox.jarlet.command
 
-import com.github.ajalt.clikt.core.CliktCommand
+import me.devsnox.jarlet.command.lib.JarletCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.flag
@@ -38,7 +38,7 @@ import me.devsnox.jarlet.plugin.PluginDependencyChecker
  * read/mutate/write), and [PluginDeclarer.declareAndRoute] against
  * [me.devsnox.jarlet.plugin.AdapterRegistry]'s three registered adapters (hangar, github, spiget).
  */
-class AddCommand : CliktCommand(name = "add") {
+class AddCommand : JarletCommand(name = "add") {
 
     override fun help(context: Context) = "Declare and fetch a new plugin for a server."
 
