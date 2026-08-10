@@ -4,11 +4,18 @@ on:
   release:
     types: [published]
 
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing GitHub Release tag to build
+        required: true
+        type: string
+
 permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.event.release.tag_name }}
+  group: native-release-${{ github.event.release.tag_name || inputs.release_tag }}
   cancel-in-progress: false
 
 jobs:
@@ -16,11 +23,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+
     steps:
       - name: Check out release tag
         uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ env.RELEASE_TAG }}
 
       - name: Set up GraalVM 25
         uses: actions/setup-java@v5
@@ -32,21 +42,24 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
 
-      - name: Test
-        run: ./gradlew --no-daemon clean :app:test
+      - name: Verify GitHub Release exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release view "$RELEASE_TAG"
 
-      - name: Build native executable
+      - name: Test and build native executable
         run: |
           ./gradlew \
             --no-daemon \
             -Dorg.gradle.java.installations.paths="$JAVA_HOME" \
+            clean \
+            :app:test \
             :app:nativeCompile
 
-      - name: Prepare release asset
-        env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+      - name: Prepare release assets
         run: |
           binary="app/build/native/nativeCompile/jarlet"
+          asset="jarlet-${RELEASE_TAG}-linux-x86_64"
 
           if [[ ! -f "$binary" ]]; then
             echo "Native executable not found: $binary"
@@ -54,16 +67,16 @@ jobs:
           fi
 
           chmod +x "$binary"
-          cp "$binary" "jarlet-${RELEASE_TAG}-linux-x86_64"
-          sha256sum "jarlet-${RELEASE_TAG}-linux-x86_64" \
-            > "jarlet-${RELEASE_TAG}-linux-x86_64.sha256"
+          cp "$binary" "$asset"
+          sha256sum "$asset" > "${asset}.sha256"
 
-      - name: Upload native executable to release
+      - name: Upload native executable to GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
+          asset="jarlet-${RELEASE_TAG}-linux-x86_64"
+
           gh release upload "$RELEASE_TAG" \
-            "jarlet-${RELEASE_TAG}-linux-x86_64" \
-            "jarlet-${RELEASE_TAG}-linux-x86_64.sha256" \
+            "$asset" \
+            "${asset}.sha256" \
             --clobber
