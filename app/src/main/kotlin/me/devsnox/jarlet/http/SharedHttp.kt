@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
+import java.util.HexFormat
 
 /**
  * Small shared HTTP/hashing plumbing used across every subsystem that talks
@@ -184,7 +185,7 @@ object SharedHttp {
                 digest.update(buffer, 0, read)
             }
         }
-        return digest.digest().joinToString("") { "%02x".format(it) }
+        return HexFormat.of().formatHex(digest.digest())
     }
 
     private fun requestBuilder(url: String, headers: Map<String, String>): HttpRequest.Builder {

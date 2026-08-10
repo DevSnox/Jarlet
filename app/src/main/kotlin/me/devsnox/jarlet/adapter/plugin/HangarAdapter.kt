@@ -100,19 +100,17 @@ object HangarAdapter : PluginSourceAdapter {
     private fun get(path: String): String {
         if (jwt.isNullOrEmpty()) authenticate()
 
-        var response = try {
-            SharedHttp.get("$hangarApi$path", mapOf("Authorization" to "HangarAuth $jwt"))
-        } catch (e: IOException) {
-            throw HangarAdapterException("Hangar request failed: $path")
-        }
-
-        if (response.status == 401) {
-            authenticate()
-            response = try {
+        fun attempt(): SharedHttp.Response =
+            try {
                 SharedHttp.get("$hangarApi$path", mapOf("Authorization" to "HangarAuth $jwt"))
             } catch (e: IOException) {
                 throw HangarAdapterException("Hangar request failed: $path")
             }
+
+        var response = attempt()
+        if (response.status == 401) {
+            authenticate()
+            response = attempt()
         }
 
         if (response.status !in 200..299) {

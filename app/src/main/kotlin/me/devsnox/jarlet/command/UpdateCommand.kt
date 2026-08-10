@@ -11,6 +11,7 @@ import me.devsnox.jarlet.command.lib.serverCommandBody
 import java.nio.file.Files
 import me.devsnox.jarlet.plugin.PluginDependencyChecker
 import me.devsnox.jarlet.plugin.PluginRouter
+import me.devsnox.jarlet.plugin.SourceResolver
 
 /**
  * `jarlet plugin update <name> [<identifier>] [--trust]` -- Kotlin port of
@@ -70,14 +71,12 @@ class UpdateCommand : CliktCommand(name = "update") {
                 )
             }
         } else {
-            PluginRouter.routeOne(serverDir, pluginsDir, toml.plugins, target, trust)
+            PluginRouter.routeOne(serverDir, pluginsDir, toml, target, trust)
 
-            val entry = toml.plugins.firstOrNull { it.id.equals(target, ignoreCase = true) }
-            if (entry != null) {
-                PluginDependencyChecker.checkAndResolve(
-                    serverDir, pluginsDir, tomlFile, toml, entry.source, entry.id, resolveDependencies, trust,
-                )
-            }
+            val resolved = SourceResolver.resolveDeclaredIdentifier(toml, target, "update")
+            PluginDependencyChecker.checkAndResolve(
+                serverDir, pluginsDir, tomlFile, toml, resolved.source, resolved.id, resolveDependencies, trust,
+            )
         }
     }
 }

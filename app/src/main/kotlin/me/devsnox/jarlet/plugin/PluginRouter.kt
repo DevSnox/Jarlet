@@ -4,22 +4,16 @@ import java.nio.file.Path
 import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.config.JarletToml
 
-/** Thrown by [PluginRouter.routeOne] for the same failure cases `resolve_declared_identifier()`/`fail()` cover in the bash version. */
-class PluginRouterException(message: String) : Exception(message)
-
 /**
  * Kotlin port of `src/plugin/router.sh`'s routing/looping responsibility
  * (not its adapter-*loading* mechanism -- that's [AdapterRegistry], the
  * static map replacing `load_adapter()`'s dynamic sourcing). Decides which
  * registered [PluginSourceAdapter] a declared entry's `source` maps to and
  * calls it; owns the "process every declared plugin" (`run_update_all()`)
- * and "process one declared plugin" (`run_update_one()`) loops.
- *
- * `add`/`remove`/`update` (phase 5) and full identifier resolution
- * (`resolve.sh`'s `resolve_declared_identifier()`, phase 4's
- * `SourceResolver`) don't exist yet, so nothing calls these today --
- * they're ported now to get the shape right for those phases to build on,
- * per this phase's scope.
+ * and "process one declared plugin" (`run_update_one()`) loops. Full
+ * identifier resolution for the latter (`resolve.sh`'s
+ * `resolve_declared_identifier()`) is [SourceResolver.resolveDeclaredIdentifier],
+ * which [routeOne] calls directly.
  */
 object PluginRouter {
 
@@ -74,33 +68,22 @@ object PluginRouter {
 
     /**
      * Routes exactly one declared entry, identified by [identifier]
-     * matched against [declared] by `id` alone (ids are expected to be
-     * globally unique per server -- same assumption `resolve.sh`'s header
-     * documents). Kotlin equivalent of `run_update_one()`, simplified: the
-     * bash version resolves [identifier] via `resolve.sh`'s
-     * `resolve_declared_identifier()`, which is part of phase 4's
-     * `SourceResolver` and out of scope here, so this does the same
-     * by-id lookup directly against [declared] rather than through that
-     * not-yet-ported machinery.
+     * matched against [toml]'s declared entries by `id` alone (ids are
+     * expected to be globally unique per server -- same assumption
+     * `resolve.sh`'s header documents). Kotlin equivalent of
+     * `run_update_one()`: [identifier] is resolved via
+     * [SourceResolver.resolveDeclaredIdentifier], the same machinery
+     * `RemoveCommand` already uses, rather than a bespoke inline lookup.
      */
     fun routeOne(
         serverDir: Path,
         pluginsDir: Path,
-        declared: List<JarletToml.Plugin>,
+        toml: JarletToml,
         identifier: String,
         trustRequested: Boolean = false,
     ) {
-        // Case-insensitive to match resolveDeclaredIdentifier()'s
-        // behavior in SourceResolver -- a user typing `geyser` should
-        // still find a plugin declared as `Geyser`.
-        val matches = declared.filter { it.id.equals(identifier, ignoreCase = true) }
-        val entry = when (matches.size) {
-            0 -> throw PluginRouterException("No declared plugin with id '$identifier'")
-            1 -> matches.single()
-            else -> throw PluginRouterException(
-                "Multiple declared plugins with id '$identifier' -- ids are expected to be unique per server"
-            )
-        }
+        val resolved = SourceResolver.resolveDeclaredIdentifier(toml, identifier, "update")
+        val entry = toml.plugins.first { it.source == resolved.source && it.id == resolved.id }
 
         route(serverDir, pluginsDir, entry.source, entry.id, entry.policy, trustRequested)
     }

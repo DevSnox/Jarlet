@@ -9,12 +9,10 @@ import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.command.lib.resolvePluginCommandContext
 import java.nio.file.Files
 import me.devsnox.jarlet.config.JarletToml
-import me.devsnox.jarlet.config.write
 import me.devsnox.jarlet.command.lib.ServerCommandException
 import me.devsnox.jarlet.command.lib.serverCommandBody
+import me.devsnox.jarlet.plugin.PluginDeclarer
 import me.devsnox.jarlet.plugin.PluginDependencyChecker
-import me.devsnox.jarlet.plugin.PluginRouter
-import me.devsnox.jarlet.plugin.SourceResolver
 
 /**
  * `jarlet plugin add <name> <identifier> [--pin <version> | --channel <name>] [--source <hangar|spiget|github>] [--trust]`
@@ -22,22 +20,23 @@ import me.devsnox.jarlet.plugin.SourceResolver
  *
  * `source` is no longer a positional argument -- per the alpha.5 redesign
  * `commands.sh` documents, it's inferred from `identifier` by
- * [SourceResolver.resolveAddIdentifier] (`owner/repo` -> github,
+ * [me.devsnox.jarlet.plugin.SourceResolver.resolveAddIdentifier] (`owner/repo` -> github,
  * numeric -> probe hangar/spiget, name -> hangar exact slug then spiget
  * exact-name search), unless `--source` is given as an explicit escape
  * hatch that skips inference entirely (still validated via
- * [SourceResolver.validateSourceIdShape]).
+ * [me.devsnox.jarlet.plugin.SourceResolver.validateSourceIdShape]).
  *
- * Declares a new `[[plugins]]` entry in `jarlet.toml` (a full rewrite via
- * [write], same lossy-rewrite tradeoff
- * `write_toml_file()`/`json_to_toml()` document in the bash version) and
- * only *then* routes it through [PluginRouter.route] to actually fetch it
- * -- matching `cmd_add()`'s documented "declare, then act" order exactly:
- * a failed fetch still leaves the plugin declared in `jarlet.toml`.
+ * Declares a new `[[plugins]]` entry in `jarlet.toml` (a full rewrite, same
+ * lossy-rewrite tradeoff `write_toml_file()`/`json_to_toml()` document in
+ * the bash version) and only *then* routes it to actually fetch it --
+ * matching `cmd_add()`'s documented "declare, then act" order exactly: a
+ * failed fetch still leaves the plugin declared in `jarlet.toml`. The
+ * resolve/declare/write/route sequence itself is shared with
+ * [PluginDependencyChecker] via [PluginDeclarer.declareAndRoute].
  *
- * Fully wired end-to-end: [SourceResolver], [JarletToml] (tomlj-backed
- * read/mutate/write), and [PluginRouter.route] against [me.devsnox.jarlet.plugin.AdapterRegistry]'s
- * three registered adapters (hangar, github, spiget).
+ * Fully wired end-to-end: [me.devsnox.jarlet.plugin.SourceResolver], [JarletToml] (tomlj-backed
+ * read/mutate/write), and [PluginDeclarer.declareAndRoute] against
+ * [me.devsnox.jarlet.plugin.AdapterRegistry]'s three registered adapters (hangar, github, spiget).
  */
 class AddCommand : CliktCommand(name = "add") {
 
@@ -72,17 +71,6 @@ class AddCommand : CliktCommand(name = "add") {
         val pluginsDir = serverDir.resolve("plugins")
         Files.createDirectories(pluginsDir)
 
-        val (source, id) = if (sourceOverride != null) {
-            SourceResolver.validateSourceIdShape(sourceOverride!!, identifier)
-            sourceOverride!! to identifier
-        } else {
-            val resolved = SourceResolver.resolveAddIdentifier(identifier)
-            Log.info("""Resolved "$identifier" to ${resolved.id} (${resolved.source})""")
-            resolved.source to resolved.id
-        }
-
-        SourceResolver.checkIdAvailable(toml, id)
-
         // With neither --pin nor --channel given, default to tracking the
         // "Release" channel -- matching hangar.sh's own internal default
         // (`.channel // "Release"`) for entries that omit one.
@@ -92,16 +80,13 @@ class AddCommand : CliktCommand(name = "add") {
             JarletToml.Plugin.Policy(track = "channel", channel = channel ?: "Release")
         }
 
-        val updatedToml = toml.copy(plugins = toml.plugins + JarletToml.Plugin(source = source, id = id, policy = policy))
-
-        Log.info("Note: this rewrites $tomlFile in full; hand-written comments and formatting are not preserved.")
-        updatedToml.write(tomlFile)
-        Log.info("""Declared "$id" ($source) in $tomlFile""")
-
-        PluginRouter.route(serverDir, pluginsDir, source, id, policy, trust)
+        val declaration = PluginDeclarer.declareAndRoute(
+            serverDir, pluginsDir, tomlFile, toml, identifier, sourceOverride, policy, trust,
+        )
+        Log.info("""Declared "${declaration.id}" (${declaration.source}) in $tomlFile""")
 
         PluginDependencyChecker.checkAndResolve(
-            serverDir, pluginsDir, tomlFile, updatedToml, source, id, resolveDependencies, trust,
+            serverDir, pluginsDir, tomlFile, declaration.toml, declaration.source, declaration.id, resolveDependencies, trust,
         )
     }
 }

@@ -3,7 +3,6 @@ package me.devsnox.jarlet.plugin
 import java.nio.file.Path
 import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.config.JarletToml
-import me.devsnox.jarlet.config.write
 
 /**
  * Post-install `depend`/`softdepend` awareness for `plugin add`/`plugin
@@ -83,17 +82,12 @@ object PluginDependencyChecker {
             if (isDeclared(dep)) continue // may have been declared by an earlier iteration, e.g. two deps resolving to the same id
 
             try {
-                val resolved = SourceResolver.resolveAddIdentifier(dep)
-                SourceResolver.checkIdAvailable(currentToml, resolved.id)
-
                 val policy = JarletToml.Plugin.Policy(track = "channel", channel = "Release")
-                currentToml = currentToml.copy(
-                    plugins = currentToml.plugins + JarletToml.Plugin(source = resolved.source, id = resolved.id, policy = policy),
+                val declaration = PluginDeclarer.declareAndRoute(
+                    serverDir, pluginsDir, tomlFile, currentToml, dep, null, policy, trustRequested,
                 )
-                currentToml.write(tomlFile)
-                Log.info("""Declared "${resolved.id}" (${resolved.source}) in $tomlFile as a dependency of "$id"""")
-
-                PluginRouter.route(serverDir, pluginsDir, resolved.source, resolved.id, policy, trustRequested)
+                currentToml = declaration.toml
+                Log.info("""Declared "${declaration.id}" (${declaration.source}) in $tomlFile as a dependency of "$id"""")
             } catch (e: Exception) {
                 Log.info("""Failed to resolve/install dependency "$dep" of "$id": ${e.message}""")
             }
