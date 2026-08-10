@@ -59,7 +59,7 @@ internal object ServerSetup {
 
             val serverJar = serverDir.resolve("server.jar")
             if (!Files.isRegularFile(serverJar)) {
-                adapter.install(server.minecraftVersion, serverJar)
+                adapter.install(server.minecraftVersion, serverJar, server.policy)
             }
 
             val eulaFile = serverDir.resolve("eula.txt")

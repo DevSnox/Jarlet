@@ -23,7 +23,7 @@ import me.devsnox.jarlet.config.write
  * supports `--pin`/`--channel` overrides with its own validation,
  * [PluginDependencyChecker] always uses a fixed channel/Release policy, and
  * parameterizing a "policy-building strategy" here would be more machinery
- * than just having each caller build its own [JarletToml.Plugin.Policy]
+ * than just having each caller build its own [JarletToml.Policy]
  * and pass the finished value in.
  */
 object PluginDeclarer {
@@ -54,7 +54,7 @@ object PluginDeclarer {
         toml: JarletToml,
         identifier: String,
         sourceOverride: String?,
-        policy: JarletToml.Plugin.Policy,
+        policy: JarletToml.Policy,
         trustRequested: Boolean,
     ): Declaration {
         val (source, id) = if (sourceOverride != null) {

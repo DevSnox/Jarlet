@@ -52,7 +52,7 @@ class HangarAdapterIntegrationTest {
                 serverDir,
                 pluginsDir,
                 "ViaVersion",
-                JarletToml.Plugin.Policy(track = "channel", channel = "Release"),
+                JarletToml.Policy(track = "channel", channel = "Release"),
                 trustRequested = false,
             )
 

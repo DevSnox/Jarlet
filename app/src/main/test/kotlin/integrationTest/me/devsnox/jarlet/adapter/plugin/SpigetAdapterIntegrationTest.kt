@@ -28,7 +28,7 @@ class SpigetAdapterIntegrationTest {
                 serverDir = serverDir,
                 pluginsDir = pluginsDir,
                 id = "34315",
-                policy = JarletToml.Plugin.Policy(),
+                policy = JarletToml.Policy(),
                 trustRequested = false,
             )
 

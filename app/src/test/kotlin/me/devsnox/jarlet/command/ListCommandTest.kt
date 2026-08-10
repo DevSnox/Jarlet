@@ -196,9 +196,9 @@ class ListCommandTest : CommandTestSupport() {
         source = source,
         id = id,
         policy = if (pin != null) {
-            JarletToml.Plugin.Policy(pin = pin)
+            JarletToml.Policy(pin = pin)
         } else {
-            JarletToml.Plugin.Policy(track = "channel", channel = channel ?: "Release")
+            JarletToml.Policy(track = "channel", channel = channel ?: "Release")
         },
     )
 }

@@ -159,7 +159,7 @@ class ListCommand : JarletCommand(name = "list") {
         val policyDisplay: String,
     )
 
-    private fun policyDisplay(policy: JarletToml.Plugin.Policy): String = when {
+    private fun policyDisplay(policy: JarletToml.Policy): String = when {
         policy.pin != null -> "pin: ${policy.pin}"
         policy.channel != null -> "channel: ${policy.channel}"
         else -> "-"

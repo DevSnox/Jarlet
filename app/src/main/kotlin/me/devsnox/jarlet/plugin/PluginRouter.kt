@@ -31,7 +31,7 @@ object PluginRouter {
         pluginsDir: Path,
         source: String,
         id: String,
-        policy: JarletToml.Plugin.Policy,
+        policy: JarletToml.Policy,
         trustRequested: Boolean = false,
     ) {
         val adapter = AdapterRegistry.find(source)

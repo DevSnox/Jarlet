@@ -3,6 +3,7 @@ package me.devsnox.jarlet.adapter.server
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import me.devsnox.jarlet.Log
+import me.devsnox.jarlet.config.JarletToml
 import me.devsnox.jarlet.config.SysConfig
 import me.devsnox.jarlet.lib.SharedHttp
 import java.io.IOException
@@ -37,7 +38,7 @@ object PaperAdapter : ServerSoftwareAdapter {
 
     private val paperApi: String by lazy { SysConfig.default().value("PAPER_API") }
 
-    override fun install(minecraftVersion: String, target: Path) {
+    override fun install(minecraftVersion: String, target: Path, policy: JarletToml.Policy) {
         if (!VALID_VERSION.matches(minecraftVersion)) {
             throw PaperAdapterException("Invalid Minecraft version: $minecraftVersion")
         }
