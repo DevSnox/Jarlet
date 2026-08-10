@@ -173,6 +173,17 @@ object SourceResolver {
      * [ResolutionException] if not found (or, in a state that should be
      * unreachable given [checkIdAvailable]'s invariant, if declared more
      * than once -- e.g. a hand-edited jarlet.toml).
+     *
+     * Also accepts a github shorthand: when [identifier] contains no `/`
+     * and the exact-id match above finds nothing, it is additionally
+     * tried against the repo-name portion (after the last `/`) of every
+     * declared `source == "github"` entry's `owner/repo` id -- e.g.
+     * `"Essentials"` matches a declared `"EssentialsX/Essentials"` --
+     * since that's the only piece of a github id a user would ever
+     * plausibly type from memory (the internal `owner/repo` shape exists
+     * purely for hitting GitHub's API, see [GithubAdapter]'s header).
+     * Full `owner/repo` ids and non-github sources are unaffected: they
+     * only ever match the exact-id path above.
      */
     fun resolveDeclaredIdentifier(toml: JarletToml, identifier: String, context: String): Resolved {
         // Case-insensitive: a user typing `geyser` should match a plugin
@@ -184,7 +195,17 @@ object SourceResolver {
         // at declare time), the existing multi-match branch below still
         // reports that as the "declared under more than one source"
         // consistency error rather than silently guessing.
-        val matches = toml.plugins.filter { it.id.equals(identifier, ignoreCase = true) }
+        var matches = toml.plugins.filter { it.id.equals(identifier, ignoreCase = true) }
+
+        // Exact-id match found nothing: fall back to the github
+        // repo-name shorthand, but only for bare (no `/`) identifiers --
+        // a full "owner/repo" typo should never silently match some
+        // other repo by name alone.
+        if (matches.isEmpty() && !identifier.contains('/')) {
+            matches = toml.plugins.filter {
+                it.source == "github" && it.id.substringAfterLast('/').equals(identifier, ignoreCase = true)
+            }
+        }
 
         if (matches.isEmpty()) {
             throw ResolutionException("No declared plugin with id '$identifier' (for $context)")

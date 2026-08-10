@@ -87,6 +87,17 @@ object GithubAdapter : PluginSourceAdapter, PluginUrlMatcher {
     private val githubApi: String by lazy { SysConfig.default().value("GITHUB_API") }
     private val tiebreakField: String by lazy { SysConfig.default().value("GITHUB_ASSET_TIEBREAK_FIELD") }
 
+    /**
+     * The `repo` portion of an `owner/repo` [id] (e.g. `"Essentials"` for
+     * `"EssentialsX/Essentials"`) -- cached as `InstalledVersion.displayName`
+     * so `jarlet plugin list` can show it and
+     * [me.devsnox.jarlet.plugin.SourceResolver.resolveDeclaredIdentifier]
+     * can accept it as a `remove`/`update` shorthand. Internal (not
+     * private) only so [GithubAdapterTest] can assert on it directly
+     * without needing a live/mocked GitHub API round-trip.
+     */
+    internal fun repoNameOf(id: String): String = id.substringAfterLast('/')
+
     /** `JARLET_GITHUB_TOKEN`, if set -- raises the unauthenticated 60 req/hr limit to 5000 req/hr when supplied. Never written to disk, process-scoped only, same treatment [HangarAdapter] gives its JWT. */
     private fun authHeaders(): Map<String, String> {
         val token = System.getenv("JARLET_GITHUB_TOKEN")
@@ -262,6 +273,12 @@ object GithubAdapter : PluginSourceAdapter, PluginUrlMatcher {
                 size = assetSize,
                 file = assetName,
                 external = false,
+                // Cached so `jarlet plugin list` (and declared-identifier
+                // resolution, see SourceResolver.resolveDeclaredIdentifier)
+                // can show/accept the repo name alone instead of the full
+                // "owner/repo" id -- unlike Spiget this needs no extra API
+                // call, since [id] already contains it.
+                displayName = repoNameOf(id),
             ),
         )
 
