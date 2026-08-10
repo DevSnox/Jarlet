@@ -1,9 +1,15 @@
 package me.devsnox.jarlet.command
 
+import com.github.ajalt.clikt.core.CliktCommand
+import com.github.ajalt.clikt.testing.CliktCommandTestResult
+import com.github.ajalt.clikt.testing.test as cliktTest
+import java.io.ByteArrayOutputStream
+import java.io.PrintStream
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
+import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.config.JarletToml
 import me.devsnox.jarlet.config.write
 import me.devsnox.jarlet.server.ServerPaths
@@ -35,6 +41,47 @@ import me.devsnox.jarlet.server.ServerPaths
 abstract class CommandTestSupport {
 
     protected lateinit var serversDir: Path
+
+    /**
+     * Shadows `com.github.ajalt.clikt.testing.CliktCommand.test(argv: List<String>)`
+     * for every subclass (Kotlin resolves a member function ahead of an
+     * imported top-level extension with the same signature, so
+     * `Jarlet().test(listOf(...))` in the 8 subclasses below picks this up
+     * with zero per-test changes needed).
+     *
+     * Clikt's real `test()` only captures output written through the
+     * Mordant `Terminal`/`TerminalRecorder` it installs into the command's
+     * `Context` for the call -- confirmed by reading both
+     * `clikt-mordant-jvm-5.1.0-sources.jar`'s `CliktTesting.kt` (its own
+     * doc comment: "Anything printed with print or println is not
+     * [captured]") and `mordant-jvm-3.0.2-sources.jar`'s
+     * `TerminalRecorder.kt` (a private `StringBuilder`, entirely unrelated
+     * to `System.out`/`System.err`). [me.devsnox.jarlet.Log] intentionally
+     * has no `Context` to pull a `Terminal` from (see its doc comment), so
+     * its output can never land in that recorder -- it has to be captured
+     * separately and merged in here instead.
+     */
+    protected fun CliktCommand.test(argv: List<String>): CliktCommandTestResult {
+        val outBuffer = ByteArrayOutputStream()
+        val errBuffer = ByteArrayOutputStream()
+        val previousOut = Log.out
+        val previousErr = Log.err
+        Log.out = PrintStream(outBuffer, true)
+        Log.err = PrintStream(errBuffer, true)
+        try {
+            val result = this.cliktTest(argv)
+            val logStdout = outBuffer.toString()
+            val logStderr = errBuffer.toString()
+            return result.copy(
+                stdout = result.stdout + logStdout,
+                stderr = result.stderr + logStderr,
+                output = result.output + logStdout + logStderr,
+            )
+        } finally {
+            Log.out = previousOut
+            Log.err = previousErr
+        }
+    }
 
     @BeforeTest
     fun setUpServersDir() {
