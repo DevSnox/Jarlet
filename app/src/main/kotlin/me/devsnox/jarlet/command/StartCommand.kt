@@ -87,8 +87,8 @@ class StartCommand : JarletCommand(name = "start") {
             if (!jarMissing && serverDrifted) {
                 Log.info("jarlet.toml no longer matches the installed server.jar (was ${installedServer?.pkg} ${installedServer?.minecraftVersion}); reinstalling")
             }
-            adapter.install(server.minecraftVersion, serverJar, server.policy)
-            ServerStateStore.write(serverDir, InstalledServer(pkg = server.pkg, minecraftVersion = server.minecraftVersion))
+            val installedVersion = adapter.install(server.minecraftVersion, serverJar, server.policy)
+            ServerStateStore.write(serverDir, InstalledServer(pkg = server.pkg, minecraftVersion = installedVersion))
         }
         if (!Files.isRegularFile(serverJar)) {
             throw ServerCommandException("server.jar installation failed")

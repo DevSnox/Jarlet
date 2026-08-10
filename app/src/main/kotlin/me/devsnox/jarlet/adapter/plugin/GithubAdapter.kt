@@ -2,6 +2,7 @@ package me.devsnox.jarlet.adapter.plugin
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -13,7 +14,9 @@ import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.config.JarletToml
 import me.devsnox.jarlet.config.SysConfig
 import me.devsnox.jarlet.config.InstalledVersion
+import me.devsnox.jarlet.lib.SemVer
 import me.devsnox.jarlet.lib.SharedHttp
+import me.devsnox.jarlet.lib.pickHighestWithinBound
 import me.devsnox.jarlet.plugin.PluginSourceAdapter
 import me.devsnox.jarlet.config.PluginStateStore
 import me.devsnox.jarlet.plugin.PluginUrlMatcher
@@ -86,6 +89,8 @@ object GithubAdapter : PluginSourceAdapter, PluginUrlMatcher {
 
     private val githubApi: String by lazy { SysConfig.default().value("GITHUB_API") }
     private val tiebreakField: String by lazy { SysConfig.default().value("GITHUB_ASSET_TIEBREAK_FIELD") }
+    private val releasesListPerPage: Int by lazy { SysConfig.default().value("GITHUB_RELEASES_LIST_PER_PAGE").toInt() }
+    private val releasesListMaxPages: Int by lazy { SysConfig.default().value("GITHUB_RELEASES_LIST_MAX_PAGES").toInt() }
 
     /**
      * The `repo` portion of an `owner/repo` [id] (e.g. `"Essentials"` for
@@ -152,33 +157,61 @@ object GithubAdapter : PluginSourceAdapter, PluginUrlMatcher {
             throw GithubAdapterException("Invalid GitHub owner/repo id: $id")
         }
 
-        val releasePath = if (!policy.pin.isNullOrEmpty()) {
-            "/repos/$id/releases/tags/${policy.pin}"
+        // Minor/patch tracking needs the highest release *within the
+        // installed baseline's bound*, which isn't necessarily
+        // /releases/latest -- so it requires a separate paginated list
+        // fetch. Gated tightly behind pin being absent and track being
+        // exactly "minor"/"patch" so every other policy shape (pin,
+        // track=latest, no policy) takes the exact same single-fetch path
+        // as before, with zero added requests.
+        val useTrackBound = policy.pin.isNullOrEmpty() && (policy.track == "minor" || policy.track == "patch")
+        val baseline = if (useTrackBound) {
+            PluginStateStore.read(serverDir, sourceName, id)?.versionName?.let { SemVer.parse(it) }
         } else {
-            "/repos/$id/releases/latest"
+            null
         }
 
-        val response = try {
-            SharedHttp.get("$githubApi$releasePath", authHeaders())
-        } catch (e: IOException) {
-            throw GithubAdapterException("Could not reach GitHub for '$id'")
-        }
-
-        if (response.status == 404) {
-            Log.info("Skipping \"$id\": no matching GitHub release found (repo may not use GitHub Releases for distribution)")
-            return
-        }
-        if (response.status !in 200..299) {
-            if (isRateLimited(response)) {
-                throw GithubAdapterException(rateLimitMessage(response))
+        val release: GithubReleaseResponse
+        if (useTrackBound && baseline != null) {
+            val picked = fetchReleaseWithinBound(id, baseline, policy.track!!)
+            if (picked == null) {
+                Log.info("No $id release within the track=${policy.track} bound of the installed version was found")
+                return
             }
-            throw GithubAdapterException("GitHub request for '$id' failed with HTTP ${response.status}")
-        }
+            release = picked
+        } else {
+            if (useTrackBound) {
+                Log.debug("no semver baseline installed for \"$id\" yet; falling back to latest for track=${policy.track}")
+            }
 
-        val release = try {
-            json.decodeFromString(GithubReleaseResponse.serializer(), response.body)
-        } catch (e: Exception) {
-            throw GithubAdapterException("Could not parse GitHub release for '$id'")
+            val releasePath = if (!policy.pin.isNullOrEmpty()) {
+                "/repos/$id/releases/tags/${policy.pin}"
+            } else {
+                "/repos/$id/releases/latest"
+            }
+
+            val response = try {
+                SharedHttp.get("$githubApi$releasePath", authHeaders())
+            } catch (e: IOException) {
+                throw GithubAdapterException("Could not reach GitHub for '$id'")
+            }
+
+            if (response.status == 404) {
+                Log.info("Skipping \"$id\": no matching GitHub release found (repo may not use GitHub Releases for distribution)")
+                return
+            }
+            if (response.status !in 200..299) {
+                if (isRateLimited(response)) {
+                    throw GithubAdapterException(rateLimitMessage(response))
+                }
+                throw GithubAdapterException("GitHub request for '$id' failed with HTTP ${response.status}")
+            }
+
+            release = try {
+                json.decodeFromString(GithubReleaseResponse.serializer(), response.body)
+            } catch (e: Exception) {
+                throw GithubAdapterException("Could not parse GitHub release for '$id'")
+            }
         }
 
         val tagName = release.tagName
@@ -286,6 +319,51 @@ object GithubAdapter : PluginSourceAdapter, PluginUrlMatcher {
         if (!expectedHash.isNullOrEmpty()) {
             Log.info("SHA-256: $expectedHash")
         }
+    }
+
+    /**
+     * Pages through `GET /repos/$id/releases` (bounded by
+     * `GITHUB_RELEASES_LIST_MAX_PAGES` pages of
+     * `GITHUB_RELEASES_LIST_PER_PAGE` each, per `jarlet-sys.conf`),
+     * filtering out prerelease/draft entries (the same rule [process]
+     * already applies to the single-release paths just below), and picks
+     * the highest release within [track]'s bound of [baseline] via
+     * [pickHighestWithinBound]. Returns null if none qualify. A page
+     * returning fewer than the configured page size ends the scan early --
+     * same idiom [SpigetAdapter.resolvePinnedVersion] already uses. Only
+     * reached when [process] already established a usable semver baseline
+     * for a `track = "minor"/"patch"` policy -- see there.
+     */
+    private fun fetchReleaseWithinBound(id: String, baseline: SemVer, track: String): GithubReleaseResponse? {
+        val candidates = mutableListOf<GithubReleaseResponse>()
+
+        for (page in 1..releasesListMaxPages) {
+            val response = try {
+                SharedHttp.get("$githubApi/repos/$id/releases?per_page=$releasesListPerPage&page=$page", authHeaders())
+            } catch (e: IOException) {
+                throw GithubAdapterException("Could not reach GitHub while listing releases for '$id'")
+            }
+
+            if (response.status !in 200..299) {
+                if (isRateLimited(response)) {
+                    throw GithubAdapterException(rateLimitMessage(response))
+                }
+                throw GithubAdapterException("GitHub release list request for '$id' failed with HTTP ${response.status}")
+            }
+
+            val pageReleases = try {
+                json.decodeFromString(ListSerializer(GithubReleaseResponse.serializer()), response.body)
+            } catch (e: Exception) {
+                throw GithubAdapterException("Could not parse GitHub release list for '$id'")
+            }
+
+            candidates += pageReleases.filterNot { it.prerelease || it.draft }
+
+            // Fewer than a full page means we've reached the end of the list.
+            if (pageReleases.size < releasesListPerPage) break
+        }
+
+        return pickHighestWithinBound(candidates, { it.tagName ?: "" }, baseline, track)
     }
 
     /**

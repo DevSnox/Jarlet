@@ -162,6 +162,7 @@ class ListCommand : JarletCommand(name = "list") {
     private fun policyDisplay(policy: JarletToml.Policy): String = when {
         policy.pin != null -> "pin: ${policy.pin}"
         policy.channel != null -> "channel: ${policy.channel}"
+        policy.track == "minor" || policy.track == "patch" -> "track: ${policy.track}"
         else -> "-"
     }
 }

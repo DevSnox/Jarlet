@@ -5,7 +5,9 @@ import kotlinx.serialization.json.Json
 import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.config.JarletToml
 import me.devsnox.jarlet.config.SysConfig
+import me.devsnox.jarlet.lib.SemVer
 import me.devsnox.jarlet.lib.SharedHttp
+import me.devsnox.jarlet.lib.pickHighestWithinBound
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -38,7 +40,7 @@ object PaperAdapter : ServerSoftwareAdapter {
 
     private val paperApi: String by lazy { SysConfig.default().value("PAPER_API") }
 
-    override fun install(minecraftVersion: String, target: Path, policy: JarletToml.Policy) {
+    override fun install(minecraftVersion: String, target: Path, policy: JarletToml.Policy): String {
         if (!VALID_VERSION.matches(minecraftVersion)) {
             throw PaperAdapterException("Invalid Minecraft version: $minecraftVersion")
         }
@@ -49,10 +51,30 @@ object PaperAdapter : ServerSoftwareAdapter {
             throw PaperAdapterException("Paper does not support Minecraft $minecraftVersion")
         }
 
-        val build = fetchBuilds(minecraftVersion)
+        // Under track = "minor"/"patch", `minecraftVersion` is a movable
+        // baseline, not a fixed target -- resolve the highest MC version
+        // Paper supports within that bound (no new HTTP call: `project`
+        // above already lists every version Paper supports). Every other
+        // policy shape (pin, track=latest/channel, no policy) resolves to
+        // exactly `minecraftVersion` unchanged, same as today.
+        val baseline = SemVer.parse(minecraftVersion)
+        val resolvedVersion = if (baseline != null && (policy.track == "minor" || policy.track == "patch")) {
+            val candidates = project.versions.values.flatten()
+            // Inclusive of the baseline itself (see SemVer.bounds), and
+            // minecraftVersion is already confirmed present in `candidates`
+            // by the support-check above -- so this can only be null if
+            // minecraftVersion itself somehow failed to parse, which
+            // [baseline] already ruled out. The null-coalesce is a pure
+            // defensive fallback, not an expected path.
+            pickHighestWithinBound(candidates, { it }, baseline, policy.track) ?: minecraftVersion
+        } else {
+            minecraftVersion
+        }
+
+        val build = fetchBuilds(resolvedVersion)
             .filter { it.channel == "STABLE" && it.downloads.containsKey("server:default") }
             .maxByOrNull { it.id }
-            ?: throw PaperAdapterException("No stable Paper build exists for Minecraft $minecraftVersion")
+            ?: throw PaperAdapterException("No stable Paper build exists for Minecraft $resolvedVersion")
 
         val download = build.downloads.getValue("server:default")
 
@@ -62,7 +84,7 @@ object PaperAdapter : ServerSoftwareAdapter {
 
         val temporary = Files.createTempFile(targetDir, ".paper-download-", ".tmp")
         try {
-            Log.info("Downloading Paper $minecraftVersion build ${build.id}")
+            Log.info("Downloading Paper $resolvedVersion build ${build.id}")
 
             try {
                 SharedHttp.download(download.url, temporary)
@@ -87,6 +109,8 @@ object PaperAdapter : ServerSoftwareAdapter {
 
         Log.info("Installed ${download.name} as $target")
         Log.info("SHA-256: ${download.checksums.sha256}")
+
+        return resolvedVersion
     }
 
     private fun fetchProject(): PaperProjectResponse {

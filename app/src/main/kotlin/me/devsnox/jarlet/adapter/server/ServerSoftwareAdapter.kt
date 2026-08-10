@@ -27,6 +27,7 @@ interface ServerSoftwareAdapter {
      * Downloads and verifies a server jar for [minecraftVersion], writing
      * the result to [target]. Mirrors the bash contract's
      * `install_<package>_server(minecraft_version, target)` entry point.
+     * Returns the Minecraft version actually installed.
      *
      * Implementations are expected to throw on any failure (unsupported
      * version, network failure, checksum mismatch, ...) rather than
@@ -34,11 +35,17 @@ interface ServerSoftwareAdapter {
      * command layer, which is responsible for turning it into a
      * user-facing error.
      *
-     * [policy] is the `[server].policy` version-selection policy
-     * (pin/track+channel), threaded through ahead of a planned 2nd server
-     * adapter that will need it -- it is currently unused by any adapter,
-     * since Paper doesn't yet support pinning/channel-tracking a server
-     * build.
+     * [policy] is the `[server].policy` version-selection policy. Under
+     * `track = "minor"`/`"patch"`, [minecraftVersion] is a movable baseline
+     * rather than a fixed target -- an implementation MAY resolve and
+     * install a higher version within that bound (see [PaperAdapter]) and
+     * report the resolved version back through the return value, which is
+     * exactly `minecraftVersion` unchanged for every other policy shape
+     * (pin, track=latest/channel, no policy). Callers use the returned
+     * version -- not the [minecraftVersion] argument -- when recording what
+     * was actually installed (see `ServerStateStore`), so drift-detection
+     * on the next reconciliation compares against reality rather than a
+     * baseline that may have already been advanced past.
      */
-    fun install(minecraftVersion: String, target: Path, policy: JarletToml.Policy = JarletToml.Policy())
+    fun install(minecraftVersion: String, target: Path, policy: JarletToml.Policy = JarletToml.Policy()): String
 }
