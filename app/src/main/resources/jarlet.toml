@@ -7,7 +7,7 @@ memory = '2G'
 minecraft_version = '26.2'
 online_mode = true
 port = 25565
-package = "paper"
+package = 'paper'
 
 [[plugins]]
 id = 'WorldEdit'
@@ -57,6 +57,80 @@ pin = '2.22.0'
 
 [[plugins]]
 id = 'ChestShop'
+source = 'hangar'
+
+[plugins.policy]
+channel = 'Release'
+track = 'channel'
+
+# Additional popular Hangar plugins
+
+[[plugins]]
+id = 'ViaBackwards'
+source = 'hangar'
+
+[plugins.policy]
+channel = 'Release'
+track = 'channel'
+
+[[plugins]]
+id = 'BlueMap'
+source = 'hangar'
+
+[plugins.policy]
+channel = 'Release'
+track = 'channel'
+
+[[plugins]]
+id = 'GSit'
+source = 'hangar'
+
+[plugins.policy]
+channel = 'Release'
+track = 'channel'
+
+[[plugins]]
+id = 'Maintenance'
+source = 'hangar'
+
+[plugins.policy]
+channel = 'Release'
+track = 'channel'
+
+[[plugins]]
+id = 'SimpleVoiceChat'
+source = 'hangar'
+
+[plugins.policy]
+channel = 'Release'
+track = 'channel'
+
+[[plugins]]
+id = 'MiniMOTD'
+source = 'hangar'
+
+[plugins.policy]
+channel = 'Release'
+track = 'channel'
+
+[[plugins]]
+id = 'Multiverse-Core'
+source = 'hangar'
+
+[plugins.policy]
+channel = 'Release'
+track = 'channel'
+
+[[plugins]]
+id = 'PlaceholderAPI'
+source = 'hangar'
+
+[plugins.policy]
+channel = 'Release'
+track = 'channel'
+
+[[plugins]]
+id = 'Skript'
 source = 'hangar'
 
 [plugins.policy]
