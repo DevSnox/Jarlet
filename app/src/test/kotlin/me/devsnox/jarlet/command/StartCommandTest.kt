@@ -6,6 +6,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import me.devsnox.jarlet.Jarlet
+import me.devsnox.jarlet.config.InstalledServer
+import me.devsnox.jarlet.config.ServerStateStore
 
 /**
  * `jarlet start <name> [template-file] [--foreground] [--accept-eula]`
@@ -84,10 +86,12 @@ class StartCommandTest : CommandTestSupport() {
         val tomlFile = writeServerToml("myserver")
         val serverDir = tomlFile.parent
 
-        // Pre-accept the EULA and drop in a placeholder server.jar so the
-        // command never reaches the network-dependent install step.
+        // Pre-accept the EULA and drop in a placeholder server.jar, with a
+        // matching server-state.json record, so the command never reaches
+        // the network-dependent install step.
         Files.writeString(serverDir.resolve("eula.txt"), "eula=true\n")
         Files.writeString(serverDir.resolve("server.jar"), "not a real jar, just needs to exist")
+        ServerStateStore.write(serverDir, InstalledServer(pkg = "paper", minecraftVersion = "1.21.1"))
 
         val jarletDir = Files.createDirectories(serverDir.resolve(".jarlet"))
         val ownPid = ProcessHandle.current().pid()
@@ -99,6 +103,82 @@ class StartCommandTest : CommandTestSupport() {
         assertTrue(
             result.stderr.contains("Server is already running with PID $ownPid"),
             "got: ${result.stderr}",
+        )
+    }
+
+    @Test
+    fun `matching server-state does not trigger a reinstall`() {
+        val tomlFile = writeServerToml("myserver")
+        val serverDir = tomlFile.parent
+
+        Files.writeString(serverDir.resolve("eula.txt"), "eula=true\n")
+        Files.writeString(serverDir.resolve("server.jar"), "not a real jar, just needs to exist")
+        ServerStateStore.write(serverDir, InstalledServer(pkg = "paper", minecraftVersion = "1.21.1"))
+
+        // A live PID short-circuits the command right after the
+        // install/plugin-reconciliation block, before any subprocess is
+        // spawned -- if a reinstall were wrongly attempted here, it would
+        // hit the network (unavailable in this sandbox) and fail with a
+        // different error before ever reaching this check.
+        val jarletDir = Files.createDirectories(serverDir.resolve(".jarlet"))
+        val ownPid = ProcessHandle.current().pid()
+        Files.writeString(jarletDir.resolve("server.pid"), "$ownPid\n")
+
+        val result = Jarlet().test(listOf("start", "myserver"))
+
+        assertEquals(1, result.statusCode)
+        assertTrue(
+            result.stderr.contains("Server is already running with PID $ownPid"),
+            "expected the already-running guard to be reached without a reinstall attempt, got: ${result.stderr}",
+        )
+    }
+
+    @Test
+    fun `a minecraft_version differing from the recorded server-state triggers a reinstall attempt`() {
+        val tomlFile = writeServerToml("myserver")
+        val serverDir = tomlFile.parent
+
+        Files.writeString(serverDir.resolve("eula.txt"), "eula=true\n")
+        Files.writeString(serverDir.resolve("server.jar"), "not a real jar, just needs to exist")
+        // Recorded state is for a different Minecraft version than the
+        // toml declares -- this drift must force a reinstall attempt
+        // (which fails here since this sandbox has no network access),
+        // rather than reaching the already-running guard below.
+        ServerStateStore.write(serverDir, InstalledServer(pkg = "paper", minecraftVersion = "1.20.4"))
+
+        val jarletDir = Files.createDirectories(serverDir.resolve(".jarlet"))
+        val ownPid = ProcessHandle.current().pid()
+        Files.writeString(jarletDir.resolve("server.pid"), "$ownPid\n")
+
+        val result = Jarlet().test(listOf("start", "myserver"))
+
+        assertEquals(1, result.statusCode)
+        assertTrue(
+            !result.stderr.contains("Server is already running"),
+            "expected a reinstall attempt (and its failure) before the already-running guard, got: ${result.stderr}",
+        )
+    }
+
+    @Test
+    fun `a fresh start with no prior server-state still attempts installation`() {
+        // No regression: with no server-state.json at all (first-ever
+        // start, or a state file that predates this feature), a missing
+        // server.jar must still trigger installation exactly as before --
+        // it must not be skipped just because there's no recorded state.
+        writeServerToml("myserver")
+        val serverDir = serversDir.resolve("myserver")
+        Files.writeString(serverDir.resolve("eula.txt"), "eula=true\n")
+
+        val result = Jarlet().test(listOf("start", "myserver"))
+
+        // No live PID is recorded here, so a successful (skipped) install
+        // would proceed to actually spawn `java` -- instead, this sandbox
+        // has no network access, so installation is expected to fail,
+        // proving the install step was reached and attempted.
+        assertEquals(1, result.statusCode)
+        assertTrue(
+            !result.stderr.contains("--accept-eula") && !result.stderr.contains("[server]."),
+            "expected an install-stage failure, not an argument/config-validation failure, got: ${result.stderr}",
         )
     }
 }

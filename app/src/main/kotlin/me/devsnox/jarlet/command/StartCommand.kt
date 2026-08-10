@@ -11,7 +11,11 @@ import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.adapter.server.ServerSoftwareAdapters
 import me.devsnox.jarlet.command.lib.ServerCommandException
 import me.devsnox.jarlet.command.lib.serverCommandBody
+import me.devsnox.jarlet.config.InstalledServer
+import me.devsnox.jarlet.config.ServerStateStore
 import me.devsnox.jarlet.config.SysConfig
+import me.devsnox.jarlet.plugin.PluginDependencyChecker
+import me.devsnox.jarlet.plugin.PluginRouter
 import me.devsnox.jarlet.server.ServerPaths
 import me.devsnox.jarlet.server.ServerSetup
 import java.io.File
@@ -73,11 +77,36 @@ class StartCommand : JarletCommand(name = "start") {
         }
 
         val serverJar = serverDir.resolve("server.jar")
-        if (!Files.isRegularFile(serverJar)) {
+        val installedServer = ServerStateStore.read(serverDir)
+        val serverDrifted = installedServer == null ||
+                installedServer.pkg != server.pkg ||
+                installedServer.minecraftVersion != server.minecraftVersion
+        val jarMissing = !Files.isRegularFile(serverJar)
+
+        if (jarMissing || serverDrifted) {
+            if (!jarMissing && serverDrifted) {
+                Log.info("jarlet.toml no longer matches the installed server.jar (was ${installedServer?.pkg} ${installedServer?.minecraftVersion}); reinstalling")
+            }
             adapter.install(server.minecraftVersion, serverJar, server.policy)
+            ServerStateStore.write(serverDir, InstalledServer(pkg = server.pkg, minecraftVersion = server.minecraftVersion))
         }
         if (!Files.isRegularFile(serverJar)) {
             throw ServerCommandException("server.jar installation failed")
+        }
+
+        val pluginsDir = serverDir.resolve("plugins")
+        Files.createDirectories(pluginsDir)
+        PluginRouter.routeAll(serverDir, pluginsDir, toml.plugins, trustRequested = false)
+        var currentToml = toml
+        for (entry in toml.plugins) {
+            try {
+                currentToml = PluginDependencyChecker.checkAndResolve(
+                    serverDir, pluginsDir, config, currentToml, entry.source, entry.id,
+                    resolveDependencies = false, trustRequested = false,
+                )
+            } catch (e: Exception) {
+                Log.info("""Failed to check/resolve dependencies for "${entry.id}" (${entry.source}): ${e.message}, continuing""")
+            }
         }
 
         val jarletDir = serverDir.resolve(".jarlet")
