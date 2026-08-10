@@ -9,6 +9,7 @@ import com.github.ajalt.clikt.parameters.options.option
 import me.devsnox.jarlet.command.lib.resolvePluginCommandContext
 import me.devsnox.jarlet.command.lib.serverCommandBody
 import java.nio.file.Files
+import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.plugin.PluginDependencyChecker
 import me.devsnox.jarlet.plugin.PluginRouter
 import me.devsnox.jarlet.plugin.SourceResolver
@@ -66,9 +67,13 @@ class UpdateCommand : CliktCommand(name = "update") {
 
             var currentToml = toml
             for (entry in toml.plugins) {
-                currentToml = PluginDependencyChecker.checkAndResolve(
-                    serverDir, pluginsDir, tomlFile, currentToml, entry.source, entry.id, resolveDependencies, trust,
-                )
+                try {
+                    currentToml = PluginDependencyChecker.checkAndResolve(
+                        serverDir, pluginsDir, tomlFile, currentToml, entry.source, entry.id, resolveDependencies, trust,
+                    )
+                } catch (e: Exception) {
+                    Log.info("""Failed to check/resolve dependencies for "${entry.id}" (${entry.source}): ${e.message}, continuing""")
+                }
             }
         } else {
             PluginRouter.routeOne(serverDir, pluginsDir, toml, target, trust)

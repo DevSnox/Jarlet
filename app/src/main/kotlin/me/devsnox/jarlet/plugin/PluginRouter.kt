@@ -49,6 +49,13 @@ object PluginRouter {
      * subcommand" / "explicit `update` with no target" behavior of
      * processing everything, and its "No plugins declared" message when
      * [declared] is empty.
+     *
+     * Each entry is routed independently: an adapter failure for one
+     * (network failure, verification failure, an external-hosting gate,
+     * etc.) is logged and skipped rather than propagated, so a single bad
+     * plugin can't abort every entry after it in the bulk update -- the
+     * same per-entry isolation [PluginDependencyChecker.checkAndResolve]
+     * already applies to its own dependency-resolution loop.
      */
     fun routeAll(
         serverDir: Path,
@@ -62,7 +69,11 @@ object PluginRouter {
         }
 
         for (entry in declared) {
-            route(serverDir, pluginsDir, entry.source, entry.id, entry.policy, trustRequested)
+            try {
+                route(serverDir, pluginsDir, entry.source, entry.id, entry.policy, trustRequested)
+            } catch (e: Exception) {
+                Log.info("""Failed to update "${entry.id}" (${entry.source}): ${e.message}, continuing""")
+            }
         }
     }
 
