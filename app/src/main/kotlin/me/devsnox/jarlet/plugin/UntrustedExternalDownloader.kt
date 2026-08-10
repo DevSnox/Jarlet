@@ -129,6 +129,14 @@ object UntrustedExternalDownloader {
             val target = pluginsDir.resolve(fileName)
             Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING)
 
+            // The externally-hosted download's filename may differ from
+            // what was previously recorded for this source+id (the
+            // confirmed live Hangar/Geyser case: `Geyser.jar` on one
+            // version, `Geyser-Spigot.jar` on another) -- remove the
+            // now-stale jar only now that the replacement is verified and
+            // on disk. Must run before write() overwrites the old record.
+            PluginStateStore.deleteStaleFile(serverDir, pluginsDir, source, id, fileName)
+
             // version_name: real version identity when the caller has one to
             // give, otherwise the fixed literal "external" (not null/empty),
             // which is deliberate for callers with no version context at

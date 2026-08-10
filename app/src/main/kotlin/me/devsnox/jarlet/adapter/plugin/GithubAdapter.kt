@@ -243,6 +243,13 @@ object GithubAdapter : PluginSourceAdapter, PluginUrlMatcher {
             Files.deleteIfExists(temporary)
         }
 
+        // The new release's asset filename may differ from what was
+        // previously recorded (e.g. an embedded version number bump) --
+        // remove the now-stale jar only now that the replacement is
+        // verified and on disk. Must run before write() overwrites the old
+        // record.
+        PluginStateStore.deleteStaleFile(serverDir, pluginsDir, sourceName, id, assetName)
+
         PluginStateStore.write(
             serverDir,
             InstalledVersion(

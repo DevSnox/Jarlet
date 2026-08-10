@@ -8,6 +8,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import me.devsnox.jarlet.Log
 
 /**
  * One entry of `plugins-state.json` -- Jarlet's own locally-written record
@@ -106,6 +107,46 @@ object PluginStateStore {
         val existing = readAll(serverDir)
         val updated = existing.filterNot { it.source == source && it.id == id }
         if (updated.size != existing.size) writeAll(serverDir, updated)
+    }
+
+    /**
+     * Deletes the previously-installed jar recorded for `source`+`id` when
+     * an update resolved a *different* filename for the new version --
+     * guards against a version bump that changes the download's filename
+     * (embedded version numbers, e.g. `worldedit-bukkit-7.4.4.jar` ->
+     * `worldedit-bukkit-7.4.5.jar`, or a wholesale naming-convention switch,
+     * e.g. Hangar's Geyser project resolving `Geyser.jar` on one version and
+     * `Geyser-Spigot.jar` on another via its external-hosting path) leaving
+     * the stale jar sitting in [pluginsDir] forever, since a plain
+     * `Files.move`/copy of the new file never touches an old file under a
+     * different name. Two jars that both declare the same plugin `name` in
+     * their `plugin.yml` is exactly the duplicate-plugin scenario Paper
+     * cannot be trusted to resolve safely.
+     *
+     * Callers MUST invoke this only after the new version has already been
+     * downloaded, verified, and moved into place in [pluginsDir] -- so that
+     * a failed/interrupted download never leaves the plugin with zero
+     * working jars; deleting the stale file after the working replacement
+     * is already on disk is what makes that ordering safe. Call this
+     * *before* [write] records the new entry, since [write] overwrites the
+     * very [InstalledVersion.file] this needs to read to know what to
+     * delete.
+     *
+     * Never throws: a failure to remove a stale jar (e.g. a permissions
+     * issue) must not turn an otherwise fully-successful update into a
+     * reported failure -- it's logged as a warning instead.
+     */
+    fun deleteStaleFile(serverDir: Path, pluginsDir: Path, source: String, id: String, newFile: String) {
+        val previousFile = read(serverDir, source, id)?.file ?: return
+        if (previousFile == newFile) return
+
+        try {
+            if (Files.deleteIfExists(pluginsDir.resolve(previousFile))) {
+                Log.info("Removed stale jar from previous version: $previousFile")
+            }
+        } catch (e: Exception) {
+            Log.warn("Could not remove stale jar '$previousFile' left over from a previous version of \"$id\" ($source): ${e.message}")
+        }
     }
 
     /**

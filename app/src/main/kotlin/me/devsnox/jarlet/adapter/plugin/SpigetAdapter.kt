@@ -293,6 +293,13 @@ object SpigetAdapter : PluginSourceAdapter {
 
             Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING)
 
+            // The new version's filename may differ from what was
+            // previously recorded (e.g. the proxy's reported filename
+            // changes across versions) -- remove the now-stale jar only now
+            // that the replacement is verified and on disk. Must run before
+            // write() overwrites the old record.
+            PluginStateStore.deleteStaleFile(serverDir, pluginsDir, sourceName, id, fileName)
+
             PluginStateStore.write(
                 serverDir,
                 InstalledVersion(
