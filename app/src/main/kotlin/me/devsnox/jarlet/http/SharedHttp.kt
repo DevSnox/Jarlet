@@ -58,7 +58,18 @@ object SharedHttp {
         "${sysConfig.value("PROJECT_NAME")}/${JarletVersion.VERSION} (${sysConfig.value("REPO_URL")})"
     }
 
-    data class Response(val status: Int, val body: String)
+    /**
+     * [headers] is response headers keyed by lower-cased header name (HTTP
+     * header names are case-insensitive, and `java.net.http`'s
+     * `HttpHeaders` already preserves multiple values per name via
+     * `firstValue`/`allValues`; only the first value per name is kept here
+     * since every current/anticipated caller -- e.g. `x-ratelimit-remaining`,
+     * `x-ratelimit-reset` -- only ever needs a single value). Empty for
+     * [Download]'s call path (not populated there; only [get] and [post]
+     * populate it) and for any pre-existing construction site that doesn't
+     * pass one, so this is purely additive.
+     */
+    data class Response(val status: Int, val body: String, val headers: Map<String, String> = emptyMap())
 
     /**
      * Plain GET against [url] with [headers] (plus `User-Agent`), returning
@@ -74,7 +85,7 @@ object SharedHttp {
         val start = System.currentTimeMillis()
         val response = send(request, HttpResponse.BodyHandlers.ofString())
         Log.debug("GET $url -> ${response.statusCode()} (${System.currentTimeMillis() - start}ms)")
-        return Response(response.statusCode(), response.body())
+        return Response(response.statusCode(), response.body(), responseHeaders(response))
     }
 
     /**
@@ -106,7 +117,7 @@ object SharedHttp {
         val start = System.currentTimeMillis()
         val response = send(request, HttpResponse.BodyHandlers.ofString())
         Log.debug("POST $url -> ${response.statusCode()} (${System.currentTimeMillis() - start}ms)")
-        return Response(response.statusCode(), response.body())
+        return Response(response.statusCode(), response.body(), responseHeaders(response))
     }
 
     data class Download(val size: Long, val fileName: String?)
@@ -187,6 +198,10 @@ object SharedHttp {
         }
         return HexFormat.of().formatHex(digest.digest())
     }
+
+    /** Flattens `java.net.http`'s multi-value [HttpResponse.headers] into a single-value, lower-cased-key map (see [Response.headers] doc for why first-value-only is sufficient here). */
+    private fun responseHeaders(response: HttpResponse<*>): Map<String, String> =
+        response.headers().map().entries.associate { (name, values) -> name.lowercase() to values.first() }
 
     private fun requestBuilder(url: String, headers: Map<String, String>): HttpRequest.Builder {
         var builder = HttpRequest.newBuilder(URI.create(url)).header("User-Agent", userAgent)

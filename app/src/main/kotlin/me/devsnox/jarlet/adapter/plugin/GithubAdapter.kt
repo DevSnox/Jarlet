@@ -6,6 +6,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import me.devsnox.jarlet.Log
@@ -157,6 +158,9 @@ object GithubAdapter : PluginSourceAdapter, PluginUrlMatcher {
             return
         }
         if (response.status !in 200..299) {
+            if (isRateLimited(response)) {
+                throw GithubAdapterException(rateLimitMessage(response))
+            }
             throw GithubAdapterException("GitHub request for '$id' failed with HTTP ${response.status}")
         }
 
@@ -288,6 +292,48 @@ object GithubAdapter : PluginSourceAdapter, PluginUrlMatcher {
 
     private fun JsonObject.stringField(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
     private fun JsonObject.longField(key: String): Long? = this[key]?.jsonPrimitive?.longOrNull
+
+    /**
+     * True when [response] looks like GitHub's documented rate-limit
+     * rejection shape rather than a genuine access-denial/other failure:
+     * `403` (occasionally `429`) with either `x-ratelimit-remaining: 0` or
+     * a JSON body whose `message` field contains `"API rate limit exceeded"`.
+     * Per the proposal doc this exact convention isn't independently
+     * re-verified here (reusing prior research), so both signals are
+     * checked rather than relying on either alone.
+     */
+    private fun isRateLimited(response: SharedHttp.Response): Boolean {
+        if (response.status != 403 && response.status != 429) return false
+        if (response.headers["x-ratelimit-remaining"] == "0") return true
+        val message = try {
+            json.parseToJsonElement(response.body).jsonObject["message"]?.jsonPrimitive?.contentOrNull
+        } catch (e: Exception) {
+            null
+        }
+        return message?.contains("API rate limit exceeded", ignoreCase = true) == true
+    }
+
+    /**
+     * Builds the actionable rate-limit error message: mentions
+     * `JARLET_GITHUB_TOKEN` only if it isn't already set (telling a user who
+     * already set one to "set one" would be actively confusing), and
+     * includes a human-readable reset time when `x-ratelimit-reset` (Unix
+     * epoch seconds) is present. The exact unauthenticated limit (~60/hr) is
+     * GitHub's documented approximate figure, not independently reconfirmed
+     * here, so it's not asserted as a precise number.
+     */
+    private fun rateLimitMessage(response: SharedHttp.Response): String {
+        val hasToken = !System.getenv("JARLET_GITHUB_TOKEN").isNullOrEmpty()
+        val resetSuffix = response.headers["x-ratelimit-reset"]?.toLongOrNull()?.let { epochSeconds ->
+            " (resets at ${java.time.Instant.ofEpochSecond(epochSeconds)})"
+        } ?: ""
+        val advice = if (hasToken) {
+            "JARLET_GITHUB_TOKEN is already set but GitHub still rejected this request as rate-limited"
+        } else {
+            "no JARLET_GITHUB_TOKEN set -- set one to raise the limit substantially"
+        }
+        return "GitHub rate limit reached$resetSuffix ($advice)"
+    }
 
     @Serializable
     private data class GithubReleaseResponse(
