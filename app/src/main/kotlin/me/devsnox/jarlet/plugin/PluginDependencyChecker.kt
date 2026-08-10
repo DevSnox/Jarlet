@@ -84,7 +84,7 @@ object PluginDependencyChecker {
             if (isDeclared(dep)) continue // may have been declared by an earlier iteration, e.g. two deps resolving to the same id
 
             try {
-                val policy = JarletToml.Plugin.Policy(track = "channel", channel = "Release")
+                val policy = JarletToml.Policy(track = "channel", channel = "Release")
                 val declaration = PluginDeclarer.declareAndRoute(
                     serverDir, pluginsDir, tomlFile, currentToml, dep, null, policy, trustRequested,
                 )

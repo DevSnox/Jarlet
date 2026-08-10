@@ -117,15 +117,15 @@ object GithubAdapter : PluginSourceAdapter, PluginUrlMatcher {
     override fun match(url: String): PluginUrlMatcher.Match? {
         URL_TAG.matchEntire(url)?.let { m ->
             val (owner, repo, tag) = m.destructured
-            return PluginUrlMatcher.Match("$owner/$repo", JarletToml.Plugin.Policy(pin = tag))
+            return PluginUrlMatcher.Match("$owner/$repo", JarletToml.Policy(pin = tag))
         }
         URL_DOWNLOAD.matchEntire(url)?.let { m ->
             val (owner, repo, tag) = m.destructured
-            return PluginUrlMatcher.Match("$owner/$repo", JarletToml.Plugin.Policy(pin = tag))
+            return PluginUrlMatcher.Match("$owner/$repo", JarletToml.Policy(pin = tag))
         }
         URL_REPO.matchEntire(url)?.let { m ->
             val (owner, repo) = m.destructured
-            return PluginUrlMatcher.Match("$owner/$repo", JarletToml.Plugin.Policy())
+            return PluginUrlMatcher.Match("$owner/$repo", JarletToml.Policy())
         }
         return null
     }
@@ -134,7 +134,7 @@ object GithubAdapter : PluginSourceAdapter, PluginUrlMatcher {
         serverDir: Path,
         pluginsDir: Path,
         id: String,
-        policy: JarletToml.Plugin.Policy,
+        policy: JarletToml.Policy,
         trustRequested: Boolean,
     ) {
         if (!VALID_ID.matches(id)) {

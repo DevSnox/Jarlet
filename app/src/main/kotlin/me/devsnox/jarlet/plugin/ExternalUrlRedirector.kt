@@ -31,7 +31,7 @@ object ExternalUrlRedirector {
     }
 
     /** A successful [tryResolve]: redirect to [source]/[id] under [policy] instead. */
-    data class Redirect(val source: String, val id: String, val policy: JarletToml.Plugin.Policy)
+    data class Redirect(val source: String, val id: String, val policy: JarletToml.Policy)
 
     /**
      * Tries every adapter that implements [PluginUrlMatcher] to see if it

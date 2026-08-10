@@ -66,7 +66,7 @@ interface PluginSourceAdapter {
         serverDir: Path,
         pluginsDir: Path,
         id: String,
-        policy: JarletToml.Plugin.Policy,
+        policy: JarletToml.Policy,
         trustRequested: Boolean,
     )
 }

@@ -74,7 +74,7 @@ class StartCommand : JarletCommand(name = "start") {
 
         val serverJar = serverDir.resolve("server.jar")
         if (!Files.isRegularFile(serverJar)) {
-            adapter.install(server.minecraftVersion, serverJar)
+            adapter.install(server.minecraftVersion, serverJar, server.policy)
         }
         if (!Files.isRegularFile(serverJar)) {
             throw ServerCommandException("server.jar installation failed")

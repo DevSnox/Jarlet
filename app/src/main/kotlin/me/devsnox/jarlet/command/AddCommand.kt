@@ -75,9 +75,9 @@ class AddCommand : JarletCommand(name = "add") {
         // "Release" channel -- matching hangar.sh's own internal default
         // (`.channel // "Release"`) for entries that omit one.
         val policy = if (pin != null) {
-            JarletToml.Plugin.Policy(pin = pin)
+            JarletToml.Policy(pin = pin)
         } else {
-            JarletToml.Plugin.Policy(track = "channel", channel = channel ?: "Release")
+            JarletToml.Policy(track = "channel", channel = channel ?: "Release")
         }
 
         val declaration = PluginDeclarer.declareAndRoute(

@@ -148,7 +148,7 @@ object SpigetAdapter : PluginSourceAdapter {
         serverDir: Path,
         pluginsDir: Path,
         id: String,
-        policy: JarletToml.Plugin.Policy,
+        policy: JarletToml.Policy,
         trustRequested: Boolean,
     ) {
         if (!VALID_ID.matches(id)) {

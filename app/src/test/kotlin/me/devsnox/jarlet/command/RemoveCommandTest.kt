@@ -53,7 +53,7 @@ class RemoveCommandTest : CommandTestSupport() {
         val declared = JarletToml.Plugin(
             source = "hangar",
             id = "EssentialsX",
-            policy = JarletToml.Plugin.Policy(pin = "2.22.0"),
+            policy = JarletToml.Policy(pin = "2.22.0"),
         )
         val tomlFile = writeServerToml("myserver", defaultToml(plugins = listOf(declared)))
         val serverDir = tomlFile.parent

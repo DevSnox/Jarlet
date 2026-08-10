@@ -9,6 +9,10 @@ online_mode = true
 port = 25565
 package = 'paper'
 
+[server.policy]
+channel = 'Release'
+track = 'channel'
+
 [[plugins]]
 id = 'WorldEdit'
 source = 'hangar'

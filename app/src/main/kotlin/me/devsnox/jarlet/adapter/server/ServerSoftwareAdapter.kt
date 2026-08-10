@@ -1,5 +1,6 @@
 package me.devsnox.jarlet.adapter.server
 
+import me.devsnox.jarlet.config.JarletToml
 import java.nio.file.Path
 
 /**
@@ -32,6 +33,12 @@ interface ServerSoftwareAdapter {
      * returning a status -- callers should let that propagate up to the
      * command layer, which is responsible for turning it into a
      * user-facing error.
+     *
+     * [policy] is the `[server].policy` version-selection policy
+     * (pin/track+channel), threaded through ahead of a planned 2nd server
+     * adapter that will need it -- it is currently unused by any adapter,
+     * since Paper doesn't yet support pinning/channel-tracking a server
+     * build.
      */
-    fun install(minecraftVersion: String, target: Path)
+    fun install(minecraftVersion: String, target: Path, policy: JarletToml.Policy = JarletToml.Policy())
 }

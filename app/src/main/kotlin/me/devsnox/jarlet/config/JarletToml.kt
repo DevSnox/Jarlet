@@ -43,6 +43,7 @@ data class JarletToml(
         val memory: String,
         val port: Int,
         val onlineMode: Boolean,
+        val policy: Policy = Policy(),
     )
 
     /**
@@ -59,13 +60,24 @@ data class JarletToml(
         val source: String,
         val id: String,
         val policy: Policy = Policy(),
-    ) {
-        data class Policy(
-            val pin: String? = null,
-            val track: String? = null,
-            val channel: String? = null,
-        )
-    }
+    )
+
+    /**
+     * Version-selection policy shape shared by [Plugin] and [Server] --
+     * `{ pin = "<version>" }`, `{ track = "latest" }`, or
+     * `{ track = "channel", channel = "..." }` -- collapsed into one
+     * nullable-field data class, same as the previous
+     * kotlinx.serialization-based model, since tomlj's inline tables don't
+     * carry a fixed Kotlin type either and this shape is simplest for
+     * callers (see [me.devsnox.jarlet.command.ListCommand]). Not nested
+     * under [Plugin] since [Server] needs the same shape (e.g. pinning a
+     * server-software build) ahead of a planned 2nd server adapter.
+     */
+    data class Policy(
+        val pin: String? = null,
+        val track: String? = null,
+        val channel: String? = null,
+    )
 
     companion object {
         /** Reads and parses a `jarlet.toml`-shaped file at [path]. */
@@ -98,6 +110,7 @@ data class JarletToml(
                     ?: throw IllegalArgumentException("$path is missing server.port"),
                 onlineMode = serverTable.getBoolean("online_mode")
                     ?: throw IllegalArgumentException("$path is missing server.online_mode"),
+                policy = serverTable.getTable("policy")?.toPolicy() ?: Policy(),
             )
 
             val pluginsArray = root.getArray("plugins")
@@ -117,18 +130,16 @@ data class JarletToml(
                 ?: throw IllegalArgumentException("$path has a [[plugins]] entry missing source")
             val id = getString("id")
                 ?: throw IllegalArgumentException("$path has a [[plugins]] entry missing id")
-            val policyTable = getTable("policy")
-            val policy = if (policyTable == null) {
-                Plugin.Policy()
-            } else {
-                Plugin.Policy(
-                    pin = policyTable.getString("pin"),
-                    track = policyTable.getString("track"),
-                    channel = policyTable.getString("channel"),
-                )
-            }
+            val policy = getTable("policy")?.toPolicy() ?: Policy()
             return Plugin(source = source, id = id, policy = policy)
         }
+
+        /** Shared `pin`/`track`/`channel` parsing, used for both `[plugins.policy]` and `[server.policy]`. */
+        private fun TomlTable.toPolicy(): Policy = Policy(
+            pin = getString("pin"),
+            track = getString("track"),
+            channel = getString("channel"),
+        )
     }
 }
 
@@ -164,6 +175,9 @@ fun JarletToml.write(path: Path) {
         appendLine("memory = ${tomlString(server.memory)}")
         appendLine("port = ${server.port}")
         appendLine("online_mode = ${server.onlineMode}")
+        if (server.policy != JarletToml.Policy()) {
+            appendLine("policy = ${server.policy.toInlineToml()}")
+        }
 
         for (plugin in plugins) {
             appendLine()
@@ -194,12 +208,12 @@ private fun tomlString(value: String): String {
 }
 
 /**
- * Renders a [JarletToml.Plugin.Policy] as a TOML inline table, matching
- * the three shapes `src/jarlet.toml` and `plugin-management.md` document:
+ * Renders a [JarletToml.Policy] as a TOML inline table, matching the three
+ * shapes `src/jarlet.toml` and `plugin-management.md` document:
  * `{ pin = "..." }`, `{ track = "latest" }`, or
  * `{ track = "channel", channel = "..." }`.
  */
-private fun JarletToml.Plugin.Policy.toInlineToml(): String {
+private fun JarletToml.Policy.toInlineToml(): String {
     val fields = buildList {
         pin?.let { add("pin = ${tomlString(it)}") }
         track?.let { add("track = ${tomlString(it)}") }

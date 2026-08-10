@@ -36,7 +36,7 @@ class GithubAdapterIntegrationTest {
                 serverDir = serverDir,
                 pluginsDir = pluginsDir,
                 id = "ViaVersion/ViaVersion",
-                policy = JarletToml.Plugin.Policy(pin = "5.11.0"),
+                policy = JarletToml.Policy(pin = "5.11.0"),
                 trustRequested = false,
             )
 
