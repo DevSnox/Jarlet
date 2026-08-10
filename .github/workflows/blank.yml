@@ -1,0 +1,69 @@
+name: Build native release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  build-native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Set up GraalVM 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: graalvm
+          java-version: "25"
+          cache: gradle
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Test
+        run: ./gradlew --no-daemon clean :app:test
+
+      - name: Build native executable
+        run: |
+          ./gradlew \
+            --no-daemon \
+            -Dorg.gradle.java.installations.paths="$JAVA_HOME" \
+            :app:nativeCompile
+
+      - name: Prepare release asset
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          binary="app/build/native/nativeCompile/jarlet"
+
+          if [[ ! -f "$binary" ]]; then
+            echo "Native executable not found: $binary"
+            exit 1
+          fi
+
+          chmod +x "$binary"
+          cp "$binary" "jarlet-${RELEASE_TAG}-linux-x86_64"
+          sha256sum "jarlet-${RELEASE_TAG}-linux-x86_64" \
+            > "jarlet-${RELEASE_TAG}-linux-x86_64.sha256"
+
+      - name: Upload native executable to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          gh release upload "$RELEASE_TAG" \
+            "jarlet-${RELEASE_TAG}-linux-x86_64" \
+            "jarlet-${RELEASE_TAG}-linux-x86_64.sha256" \
+            --clobber
