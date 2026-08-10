@@ -1,5 +1,7 @@
 package me.devsnox.jarlet.plugin
 
+import me.devsnox.jarlet.io.PluginYamlInfo
+import me.devsnox.jarlet.io.PluginYamlReader
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.zip.ZipEntry
@@ -11,7 +13,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 /**
- * Coverage for [PluginYamlReader.read]'s extraction of the minimal
+ * Coverage for [me.devsnox.jarlet.io.PluginYamlReader.read]'s extraction of the minimal
  * `name`/`version`/`main` set plus `depend`/`softdepend`, per
  * `prototyping/documentation/sources/plugin-yml-format.md`, against
  * hand-built jars shaped like real-world plugins (Geyser, ViaVersion,

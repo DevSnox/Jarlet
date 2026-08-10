@@ -63,7 +63,7 @@ object ExternalUrlRedirector {
      * `jarlet.toml` to record the redirect -- that requires the
      * TOML-rewrite machinery ([JarletToml.write]'s full-rewrite path,
      * commented on there) that add/remove/update (phase 5, not yet ported)
-     * owns, per [PluginStateStore]'s own header note that `jarlet.toml`
+     * owns, per [me.devsnox.jarlet.config.PluginStateStore]'s own header note that `jarlet.toml`
      * rewriting is out of scope for the phase-4 plugin subsystem. The
      * practical effect: a redirected plugin is still correctly fetched via
      * its real source every run, but the redirect is re-resolved (one extra

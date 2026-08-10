@@ -5,7 +5,7 @@ import kotlinx.serialization.json.Json
 import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.config.JarletToml
 import me.devsnox.jarlet.config.SysConfig
-import me.devsnox.jarlet.http.SharedHttp
+import me.devsnox.jarlet.lib.SharedHttp
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 

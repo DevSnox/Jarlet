@@ -3,13 +3,15 @@ package me.devsnox.jarlet.plugin
 import java.nio.file.Path
 import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.config.JarletToml
+import me.devsnox.jarlet.config.PluginStateStore
+import me.devsnox.jarlet.io.PluginYamlReader
 
 /**
  * Post-install `depend`/`softdepend` awareness for `plugin add`/`plugin
  * update`, per the task's "retrieve and recognise dependencies from
  * plugin.yml ... warn him, and allow with --resolve-dependencies to add
  * plugin dependencies" -- reads the freshly-installed jar's `plugin.yml`
- * (via [PluginYamlReader]) and compares its `depend`/`softdepend` names
+ * (via [me.devsnox.jarlet.io.PluginYamlReader]) and compares its `depend`/`softdepend` names
  * against the server's currently-declared `[[plugins]]` ids.
  *
  * Matching is by exact name against declared ids only -- a `plugin.yml`
@@ -41,7 +43,7 @@ object PluginDependencyChecker {
      * growing declared-plugins list through subsequent calls.
      *
      * A no-op (returns [toml] unchanged) if nothing was actually installed
-     * for `source`/`id` (no [PluginStateStore] entry, or the recorded jar
+     * for `source`/`id` (no [me.devsnox.jarlet.config.PluginStateStore] entry, or the recorded jar
      * is missing/not a readable `plugin.yml`) -- e.g. `route()` skipped an
      * unregistered source, or the fetch itself failed.
      */

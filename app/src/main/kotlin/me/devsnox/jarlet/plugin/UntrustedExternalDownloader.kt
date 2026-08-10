@@ -1,7 +1,11 @@
 package me.devsnox.jarlet.plugin
 
 import me.devsnox.jarlet.Log
-import me.devsnox.jarlet.http.SharedHttp
+import me.devsnox.jarlet.config.InstalledVersion
+import me.devsnox.jarlet.config.PluginStateStore
+import me.devsnox.jarlet.config.TrustedSourceStore
+import me.devsnox.jarlet.lib.SharedHttp
+import me.devsnox.jarlet.io.PluginYamlReader
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path

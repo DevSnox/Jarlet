@@ -8,8 +8,8 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import me.devsnox.jarlet.Jarlet
 import me.devsnox.jarlet.config.JarletToml
-import me.devsnox.jarlet.plugin.InstalledVersion
-import me.devsnox.jarlet.plugin.PluginStateStore
+import me.devsnox.jarlet.config.InstalledVersion
+import me.devsnox.jarlet.config.PluginStateStore
 
 /**
  * `jarlet plugin remove <name> <identifier>` coverage -- entirely

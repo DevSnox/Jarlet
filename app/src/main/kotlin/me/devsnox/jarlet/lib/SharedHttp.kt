@@ -1,10 +1,12 @@
-package me.devsnox.jarlet.http
+package me.devsnox.jarlet.lib
 
 import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.config.JarletVersion
 import me.devsnox.jarlet.config.SysConfig
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.URI
+import java.net.URLDecoder
 import java.net.URLEncoder
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -13,7 +15,9 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
+import java.util.Base64
 import java.util.HexFormat
+import kotlin.collections.iterator
 
 /**
  * Small shared HTTP/hashing plumbing used across every subsystem that talks
@@ -256,7 +260,7 @@ object SharedHttp {
         if (parts.size != 3) return value
         val (charset, _, encoded) = parts
         return try {
-            java.net.URLDecoder.decode(encoded, charset.ifBlank { "UTF-8" })
+            URLDecoder.decode(encoded, charset.ifBlank { "UTF-8" })
         } catch (e: Exception) {
             encoded
         }
@@ -268,9 +272,9 @@ object SharedHttp {
         val (charset, encoding, encoded) = match.destructured
         return try {
             when (encoding.uppercase()) {
-                "B" -> String(java.util.Base64.getDecoder().decode(encoded), charset(charset))
+                "B" -> String(Base64.getDecoder().decode(encoded), charset(charset))
                 "Q" -> {
-                    val bytes = java.io.ByteArrayOutputStream()
+                    val bytes = ByteArrayOutputStream()
                     var i = 0
                     while (i < encoded.length) {
                         val c = encoded[i]

@@ -30,7 +30,7 @@ import me.devsnox.jarlet.config.JarletToml
  * `policy_json`, `trust_requested`) -- `source` itself is dropped since
  * it's already implied by which adapter got looked up. Adapters are
  * expected to be fully side-effecting (fetch, verify, write the jar under
- * `plugins_dir`, and persist the result via [PluginStateStore.write]) the
+ * `plugins_dir`, and persist the result via [me.devsnox.jarlet.config.PluginStateStore.write]) the
  * same way the bash adapters are, so there is no return value to thread
  * back through the router.
  *
@@ -58,7 +58,7 @@ interface PluginSourceAdapter {
     /**
      * Fetches/updates the declared plugin identified by [id] under
      * [policy], installs it into [pluginsDir], and records the result via
-     * [PluginStateStore.write]. [trustRequested] is threaded straight
+     * [me.devsnox.jarlet.config.PluginStateStore.write]. [trustRequested] is threaded straight
      * through from the CLI's `--trust` flag (phase 5), for adapters that
      * need it to pass on to an external-hosting gate (phase 4).
      */

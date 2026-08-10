@@ -1,19 +1,17 @@
-package me.devsnox.jarlet.plugin
+package me.devsnox.jarlet.config
 
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import me.devsnox.jarlet.Log
 
 /**
  * One entry of `plugins-state.json` -- Jarlet's own locally-written record
  * of what's actually installed for a given declared `(source, id)` pair,
- * as opposed to `jarlet.toml`'s [me.devsnox.jarlet.config.JarletToml.Plugin]
+ * as opposed to `jarlet.toml`'s [JarletToml.Plugin]
  * which only records *intent*. Kotlin equivalent of the object shape
  * `write_installed_version()` in `src/plugin/store.sh` persists (see e.g.
  * `src/adapter/plugin/hangar.sh`'s call to it for a concrete example of
@@ -52,7 +50,7 @@ data class InstalledVersion(
  * Kotlin port of `src/plugin/store.sh`'s `plugins-state.json`
  * read/write/remove helpers. Pure local bookkeeping, same as the bash
  * version -- has no knowledge of any plugin source; that's
- * [PluginRouter]/[AdapterRegistry]'s job.
+ * [me.devsnox.jarlet.plugin.PluginRouter]/[me.devsnox.jarlet.plugin.AdapterRegistry]'s job.
  *
  * Unlike `store.sh`, this does not also own `jarlet.toml` rewriting
  * (`write_toml_file()`/`json_to_toml()` there) -- that belongs with

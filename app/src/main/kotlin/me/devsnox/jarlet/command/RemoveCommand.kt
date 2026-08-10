@@ -9,7 +9,7 @@ import me.devsnox.jarlet.command.lib.serverCommandBody
 import java.nio.file.Files
 import me.devsnox.jarlet.config.JarletToml
 import me.devsnox.jarlet.config.write
-import me.devsnox.jarlet.plugin.PluginStateStore
+import me.devsnox.jarlet.config.PluginStateStore
 import me.devsnox.jarlet.plugin.SourceResolver
 
 /**
@@ -25,8 +25,8 @@ import me.devsnox.jarlet.plugin.SourceResolver
  * A full uninstall, matching `cmd_remove()` exactly: drops the
  * `[[plugins]]` entry from `jarlet.toml` (a full rewrite, same tradeoff as
  * `add`), deletes the installed jar from `plugins/` if
- * [me.devsnox.jarlet.plugin.PluginStateStore] has one on record, and clears the
- * `plugins-state.json` entry via [me.devsnox.jarlet.plugin.PluginStateStore.remove] -- all three,
+ * [PluginStateStore] has one on record, and clears the
+ * `plugins-state.json` entry via [PluginStateStore.remove] -- all three,
  * in the same order as the bash version (toml rewrite, then jar deletion,
  * then state removal), so a failure partway through leaves the same kind
  * of partial state the bash version would.

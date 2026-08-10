@@ -4,7 +4,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.config.SysConfig
-import me.devsnox.jarlet.http.SharedHttp
+import me.devsnox.jarlet.lib.SharedHttp
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path

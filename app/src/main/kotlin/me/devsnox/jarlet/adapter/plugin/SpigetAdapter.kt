@@ -7,10 +7,10 @@ import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.config.JarletToml
 import me.devsnox.jarlet.config.SysConfig
 import me.devsnox.jarlet.plugin.ExternalUrlRedirector
-import me.devsnox.jarlet.plugin.InstalledVersion
-import me.devsnox.jarlet.http.SharedHttp
+import me.devsnox.jarlet.config.InstalledVersion
+import me.devsnox.jarlet.lib.SharedHttp
 import me.devsnox.jarlet.plugin.PluginSourceAdapter
-import me.devsnox.jarlet.plugin.PluginStateStore
+import me.devsnox.jarlet.config.PluginStateStore
 import me.devsnox.jarlet.plugin.UntrustedExternalDownloader
 import java.io.IOException
 import java.nio.file.Files

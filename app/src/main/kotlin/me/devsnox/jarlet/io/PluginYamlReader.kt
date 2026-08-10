@@ -1,4 +1,4 @@
-package me.devsnox.jarlet.plugin
+package me.devsnox.jarlet.io
 
 import java.io.IOException
 import java.nio.file.Path
@@ -6,6 +6,8 @@ import java.util.zip.ZipFile
 import org.snakeyaml.engine.v2.api.Load
 import org.snakeyaml.engine.v2.api.LoadSettings
 import org.snakeyaml.engine.v2.exceptions.YamlEngineException
+import java.nio.file.Files
+import kotlin.collections.get
 
 /**
  * `name`/`version`/`main`, plus `depend`/`softdepend`, extracted from a
@@ -172,7 +174,7 @@ object PluginYamlReader {
 
     /** Reads the raw bytes of the `plugin.yml` entry from [jarPath]'s zip archive, or `null` if the jar or entry doesn't exist. */
     private fun readEntry(jarPath: Path): ByteArray? {
-        if (!java.nio.file.Files.isRegularFile(jarPath)) return null
+        if (!Files.isRegularFile(jarPath)) return null
         ZipFile(jarPath.toFile()).use { zip ->
             val entry = zip.getEntry(ENTRY_NAME) ?: return null
             return zip.getInputStream(entry).use { it.readBytes() }

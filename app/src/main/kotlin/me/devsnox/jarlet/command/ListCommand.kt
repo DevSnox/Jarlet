@@ -17,7 +17,7 @@ import me.devsnox.jarlet.command.lib.serverCommandBody
 import me.devsnox.jarlet.config.JarletToml
 import me.devsnox.jarlet.config.SysConfig
 import me.devsnox.jarlet.plugin.AdapterRegistry
-import me.devsnox.jarlet.plugin.PluginStateStore
+import me.devsnox.jarlet.config.PluginStateStore
 
 /**
  * `jarlet plugin list <name> [--page <n> | --all]` -- Kotlin port of
@@ -25,7 +25,7 @@ import me.devsnox.jarlet.plugin.PluginStateStore
  *
  * Combines the DECLARED `[[plugins]]` entries from a server's
  * `jarlet.toml` ([JarletToml.plugins]) with the INSTALLED state recorded
- * in `plugins-state.json` ([me.devsnox.jarlet.plugin.PluginStateStore.readAll]) into one merged,
+ * in `plugins-state.json` ([PluginStateStore.readAll]) into one merged,
  * paginated view, rendered as a Mordant table instead of `list.sh`'s
  * plain `printf` lines.
  *

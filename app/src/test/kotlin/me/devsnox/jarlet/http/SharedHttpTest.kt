@@ -1,5 +1,6 @@
 package me.devsnox.jarlet.http
 
+import me.devsnox.jarlet.lib.SharedHttp
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull

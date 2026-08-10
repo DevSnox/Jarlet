@@ -1,19 +1,19 @@
-package me.devsnox.jarlet.plugin
+package me.devsnox.jarlet.config
 
-import me.devsnox.jarlet.config.SysConfig
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.nio.file.StandardOpenOption
 
 /**
  * Global, per-domain trust list for externally-hosted plugin downloads --
  * Kotlin port of the trust-list half of `src/plugin/trust.sh`
  * (`trusted_sources_file()`, `url_domain()`, `is_domain_trusted()`,
- * `trust_domain()`). See [UntrustedExternalDownloader] for the other half
+ * `trust_domain()`). See [me.devsnox.jarlet.plugin.UntrustedExternalDownloader] for the other half
  * (`handle_untrusted_external_url()`, the actual fetch-and-verify gate).
  *
- * What this solves: [ExternalUrlRedirector] only handles an external URL
+ * What this solves: [me.devsnox.jarlet.plugin.ExternalUrlRedirector] only handles an external URL
  * that belongs to a source Jarlet already has a working adapter for.
  * Plenty of external hosts (e.g. Geyser's own `download.geysermc.org`) are
  * neither GitHub, Spiget, nor Hangar -- for those, an adapter's
@@ -91,6 +91,6 @@ object TrustedSourceStore {
             )
         }
 
-        Files.writeString(path, "$domain\n", java.nio.file.StandardOpenOption.APPEND)
+        Files.writeString(path, "$domain\n", StandardOpenOption.APPEND)
     }
 }
