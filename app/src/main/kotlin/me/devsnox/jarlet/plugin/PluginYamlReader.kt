@@ -42,7 +42,7 @@ data class PluginYamlInfo(
  * `prototyping/documentation/sources/plugin-yml-format.md`. The name/
  * version/main portion is a *leading indicator* only -- existing filename/
  * adapter-based naming remains the fallback and is not replaced by it. The
- * `depend`/`softdepend` portion is wired into [me.devsnox.jarlet.plugin.AddCommand]
+ * `depend`/`softdepend` portion is wired into [me.devsnox.jarlet.command.AddCommand]
  * and `me.devsnox.jarlet.command.UpdateCommand`'s post-install dependency
  * check/`--resolve-dependencies` step.
  */

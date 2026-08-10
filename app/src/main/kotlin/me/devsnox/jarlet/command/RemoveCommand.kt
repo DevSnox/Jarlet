@@ -37,7 +37,7 @@ import me.devsnox.jarlet.plugin.SourceResolver
  * [me.devsnox.jarlet.plugin.PluginRouter]/[me.devsnox.jarlet.plugin.AdapterRegistry]/phase 4 adapters at all (removal is
  * pure local bookkeeping, same as the bash version), and [JarletToml]'s
  * read/write path is on a working `tomlj`-backed implementation as of this
- * port (see [me.devsnox.jarlet.plugin.AddCommand]'s doc comment for that history).
+ * port (see [AddCommand]'s doc comment for that history).
  */
 class RemoveCommand : CliktCommand(name = "remove") {
 

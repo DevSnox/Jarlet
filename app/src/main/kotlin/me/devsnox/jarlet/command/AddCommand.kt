@@ -1,4 +1,4 @@
-package me.devsnox.jarlet.plugin
+package me.devsnox.jarlet.command
 
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.Context
@@ -12,6 +12,9 @@ import me.devsnox.jarlet.config.JarletToml
 import me.devsnox.jarlet.config.write
 import me.devsnox.jarlet.command.lib.ServerCommandException
 import me.devsnox.jarlet.command.lib.serverCommandBody
+import me.devsnox.jarlet.plugin.PluginDependencyChecker
+import me.devsnox.jarlet.plugin.PluginRouter
+import me.devsnox.jarlet.plugin.SourceResolver
 
 /**
  * `jarlet plugin add <name> <identifier> [--pin <version> | --channel <name>] [--source <hangar|spiget|github>] [--trust]`
@@ -26,14 +29,14 @@ import me.devsnox.jarlet.command.lib.serverCommandBody
  * [SourceResolver.validateSourceIdShape]).
  *
  * Declares a new `[[plugins]]` entry in `jarlet.toml` (a full rewrite via
- * [me.devsnox.jarlet.config.write], same lossy-rewrite tradeoff
+ * [write], same lossy-rewrite tradeoff
  * `write_toml_file()`/`json_to_toml()` document in the bash version) and
  * only *then* routes it through [PluginRouter.route] to actually fetch it
  * -- matching `cmd_add()`'s documented "declare, then act" order exactly:
  * a failed fetch still leaves the plugin declared in `jarlet.toml`.
  *
  * Fully wired end-to-end: [SourceResolver], [JarletToml] (tomlj-backed
- * read/mutate/write), and [PluginRouter.route] against [AdapterRegistry]'s
+ * read/mutate/write), and [PluginRouter.route] against [me.devsnox.jarlet.plugin.AdapterRegistry]'s
  * three registered adapters (hangar, github, spiget).
  */
 class AddCommand : CliktCommand(name = "add") {

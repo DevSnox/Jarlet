@@ -26,7 +26,7 @@ import java.nio.charset.StandardCharsets
  * is implemented here in full rather than against an assumed interface,
  * even though the module mapping table in the migration plan groups it
  * with phase 4 ("Plugin adapters"). It was ported as part of this phase,
- * since [AddCommand] hard-depends on it and neither phase 3 nor phase 4
+ * since [me.devsnox.jarlet.command.AddCommand] hard-depends on it and neither phase 3 nor phase 4
  * had produced it yet when this phase started (see this port's final
  * report for the full status writeup).
  */
