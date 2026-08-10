@@ -76,6 +76,19 @@ object PluginYamlReader {
             readEntry(jarPath) ?: return null
         } catch (e: IOException) {
             return null
+        } catch (e: LinkageError) {
+            // Same "never throws" reasoning as the LinkageError catch below
+            // around the parse step: readEntry() also goes through JDK zip/
+            // inflate machinery (ZipFile, entry input streams) that can hit
+            // its own class-initialization/native-linkage gaps under
+            // GraalVM native-image (e.g. a missing zlib symbol registration),
+            // independently of the SnakeYAML-specific UTF-32BE case this
+            // function was originally hardened against. Left uncaught here,
+            // that would still break this function's documented "never
+            // throws" contract just the same, so it gets the identical
+            // narrow LinkageError treatment rather than leaving this first
+            // try block as the one remaining gap.
+            return null
         }
 
         val parsed = try {
