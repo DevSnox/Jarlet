@@ -8,6 +8,12 @@ readonly API_BASE="https://api.github.com/repos/${REPOSITORY}"
 readonly API_VERSION="2026-03-10"
 
 readonly CHANNEL="${JARLET_CHANNEL:-release}"
+readonly TAG="${JARLET_TAG:-}"
+
+if [[ -n "$TAG" && -n "${JARLET_CHANNEL:-}" ]]; then
+  printf 'jarlet installer: JARLET_TAG is set; ignoring JARLET_CHANNEL\n' >&2
+fi
+
 readonly SERVICE_USER="jarlet"
 readonly SERVICE_GROUP="jarlet"
 readonly SERVICE_HOME="/home/jarlet"
@@ -67,17 +73,24 @@ case "$(uname -m)" in
     ;;
 esac
 
-case "$CHANNEL" in
-  alpha | beta | rc)
-    readonly RELEASE_API_URL="${API_BASE}/releases?per_page=100"
-    ;;
-  release)
-    readonly RELEASE_API_URL="${API_BASE}/releases/latest"
-    ;;
-  *)
-    die "invalid JARLET_CHANNEL '${CHANNEL}'; use alpha, beta, rc, or release"
-    ;;
-esac
+if [[ -n "$TAG" ]]; then
+  [[ "$TAG" =~ ^v?[0-9][0-9A-Za-z.+-]*$ ]] ||
+    die "invalid JARLET_TAG '${TAG}'"
+
+  readonly RELEASE_API_URL="${API_BASE}/releases/tags/${TAG}"
+else
+  case "$CHANNEL" in
+    alpha | beta | rc)
+      readonly RELEASE_API_URL="${API_BASE}/releases?per_page=100"
+      ;;
+    release)
+      readonly RELEASE_API_URL="${API_BASE}/releases/latest"
+      ;;
+    *)
+      die "invalid JARLET_CHANNEL '${CHANNEL}'; use alpha, beta, rc, or release"
+      ;;
+  esac
+fi
 
 readonly TEMPORARY_DIRECTORY="$(mktemp -d)"
 trap 'rm -rf -- "$TEMPORARY_DIRECTORY"' EXIT HUP INT TERM
@@ -105,25 +118,42 @@ mapfile -t release_metadata < <(
     "$CHANNEL" \
     "$ARCHITECTURE" \
     "$REPOSITORY" \
-    "$RELEASE_JSON" <<'PYTHON'
+    "$RELEASE_JSON" \
+    "$TAG" <<'PYTHON'
 import json
 import re
 import sys
 
-channel, architecture, repository, metadata_path = sys.argv[1:]
+channel, architecture, repository, metadata_path, tag_arg = sys.argv[1:]
 
 with open(metadata_path, "r", encoding="utf-8") as metadata_file:
     response = json.load(metadata_file)
 
 releases = response if isinstance(response, list) else [response]
 
-if channel == "release":
+if tag_arg:
+    candidates = [
+        release
+        for release in releases
+        if not release.get("draft", True)
+    ]
+
+    if not candidates:
+        raise SystemExit(
+            f"No published Jarlet release found for tag {tag_arg!r}"
+        )
+elif channel == "release":
     candidates = [
         release
         for release in releases
         if not release.get("draft", True)
         and not release.get("prerelease", True)
     ]
+
+    if not candidates:
+        raise SystemExit(
+            f"No published Jarlet {channel} release was found"
+        )
 else:
     channel_pattern = re.compile(
         rf"(?:^|[.-]){re.escape(channel)}(?:[.-]|$)",
@@ -138,10 +168,10 @@ else:
         and channel_pattern.search(release.get("tag_name", ""))
     ]
 
-if not candidates:
-    raise SystemExit(
-        f"No published Jarlet {channel} release was found"
-    )
+    if not candidates:
+        raise SystemExit(
+            f"No published Jarlet {channel} release was found"
+        )
 
 release = candidates[0]
 tag = release.get("tag_name", "")
@@ -254,9 +284,13 @@ download_asset() {
     "$url"
 }
 
-printf 'Downloading Jarlet %s (%s channel)...\n' \
-  "$RELEASE_TAG" \
-  "$CHANNEL"
+if [[ -n "$TAG" ]]; then
+  printf 'Downloading Jarlet %s (pinned tag)...\n' "$RELEASE_TAG"
+else
+  printf 'Downloading Jarlet %s (%s channel)...\n' \
+    "$RELEASE_TAG" \
+    "$CHANNEL"
+fi
 
 download_asset "$BINARY_URL" "$DOWNLOADED_BINARY"
 download_asset "$CHECKSUM_URL" "$DOWNLOADED_CHECKSUM"
