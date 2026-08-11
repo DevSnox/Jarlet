@@ -135,14 +135,26 @@ class StartCommandTest : CommandTestSupport() {
 
     @Test
     fun `a minecraft_version differing from the recorded server-state triggers a reinstall attempt`() {
-        val tomlFile = writeServerToml("myserver")
+        // A version that's pattern-valid (passes StartCommand's own regex
+        // guard) but doesn't exist on Paper's real project -- this makes
+        // the reinstall attempt fail deterministically regardless of
+        // whether this environment actually has network access: offline,
+        // PaperAdapter.fetchProject() throws on the network call itself;
+        // online (as on a real dev machine), fetchProject() succeeds but
+        // the version-support check then fails, since no real Minecraft
+        // version will ever match "0.0.0-nonexistent". Either way,
+        // install() throws before server.jar is ever created, so the
+        // already-running guard below is never reached. Relying on "no
+        // network in this sandbox" instead (the previous approach) is
+        // exactly what made this test flake on a machine with real
+        // connectivity.
+        val tomlFile = writeServerToml("myserver", defaultToml(minecraftVersion = "0.0.0-nonexistent"))
         val serverDir = tomlFile.parent
 
         Files.writeString(serverDir.resolve("eula.txt"), "eula=true\n")
         Files.writeString(serverDir.resolve("server.jar"), "not a real jar, just needs to exist")
         // Recorded state is for a different Minecraft version than the
-        // toml declares -- this drift must force a reinstall attempt
-        // (which fails here since this sandbox has no network access),
+        // toml declares -- this drift must force a reinstall attempt,
         // rather than reaching the already-running guard below.
         ServerStateStore.write(serverDir, InstalledServer(pkg = "paper", minecraftVersion = "1.20.4"))
 
@@ -165,16 +177,23 @@ class StartCommandTest : CommandTestSupport() {
         // start, or a state file that predates this feature), a missing
         // server.jar must still trigger installation exactly as before --
         // it must not be skipped just because there's no recorded state.
-        writeServerToml("myserver")
+        //
+        // Uses an unsupported-but-pattern-valid Minecraft version (see the
+        // comment on the drift test above) so the install attempt fails
+        // deterministically regardless of whether this environment has
+        // real network access -- relying on "no network in this sandbox"
+        // instead previously made this test spawn a real `java` process
+        // (and pass with statusCode 0) on a machine with real connectivity.
+        writeServerToml("myserver", defaultToml(minecraftVersion = "0.0.0-nonexistent"))
         val serverDir = serversDir.resolve("myserver")
         Files.writeString(serverDir.resolve("eula.txt"), "eula=true\n")
 
         val result = Jarlet().test(listOf("start", "myserver"))
 
         // No live PID is recorded here, so a successful (skipped) install
-        // would proceed to actually spawn `java` -- instead, this sandbox
-        // has no network access, so installation is expected to fail,
-        // proving the install step was reached and attempted.
+        // would proceed to actually spawn `java` -- instead, installation
+        // is expected to fail deterministically, proving the install step
+        // was reached and attempted.
         assertEquals(1, result.statusCode)
         assertTrue(
             !result.stderr.contains("--accept-eula") && !result.stderr.contains("[server]."),
