@@ -91,6 +91,7 @@ object GithubAdapter : PluginSourceAdapter, PluginUrlMatcher {
     private val tiebreakField: String by lazy { SysConfig.default().value("GITHUB_ASSET_TIEBREAK_FIELD") }
     private val releasesListPerPage: Int by lazy { SysConfig.default().value("GITHUB_RELEASES_LIST_PER_PAGE").toInt() }
     private val releasesListMaxPages: Int by lazy { SysConfig.default().value("GITHUB_RELEASES_LIST_MAX_PAGES").toInt() }
+    private val envFilePath: String by lazy { SysConfig.default().value("ENV_FILE_PATH") }
 
     /**
      * The `repo` portion of an `owner/repo` [id] (e.g. `"Essentials"` for
@@ -432,7 +433,7 @@ object GithubAdapter : PluginSourceAdapter, PluginUrlMatcher {
         val advice = if (hasToken) {
             "JARLET_GITHUB_TOKEN is already set but GitHub still rejected this request as rate-limited"
         } else {
-            "no JARLET_GITHUB_TOKEN set -- set one to raise the limit substantially"
+            "no JARLET_GITHUB_TOKEN set -- set one (permanently in $envFilePath, or export it) to raise the limit substantially"
         }
         return "GitHub rate limit reached$resetSuffix ($advice)"
     }
