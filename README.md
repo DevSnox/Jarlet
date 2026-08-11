@@ -12,8 +12,10 @@ No more manually re-downloading jars after every plugin update, or hunting down 
 
 Install Jarlet (Linux, MacOS):
 
+No stable release exists yet, so the alpha channel is set explicitly:
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/DevSnox/Jarlet/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/DevSnox/Jarlet/main/install.sh | JARLET_CHANNEL=alpha bash
 ```
 
 This downloads a verified release binary, sets it up under an isolated `jarlet` service user, and installs a `jarlet` launcher on your `PATH`. It's a one-time setup; the script asks for `sudo` itself where needed, so don't prefix it with `sudo`.
@@ -74,7 +76,6 @@ minecraft_version = "26.2"
 memory = "2G"
 port = 25565
 online_mode = true
-package = "paper"
 
 [server.policy]
 channel = "Release"
@@ -89,13 +90,16 @@ channel = "Release"
 track = "channel"
 ```
 
-<<<<<<< HEAD
-Then build the server from it:
+`policy` controls how updates are picked: `track = "channel"` follows a named release channel (`channel = "..."`), `track = "minor"`/`"patch"` stays within a semver bound, and `pin = "<exact version>"` locks to one version. `[server].policy` and each plugin's `[plugins.policy]` work the same way.
+
+Pass your own template file to start from something other than the default:
 
 ```bash
 jarlet setup my-server ./jarlet.toml
 jarlet start my-server --accept-eula --foreground
 ```
+
+Change a policy after the fact with `jarlet track`/`jarlet plugin track` instead of hand-editing `jarlet.toml`, e.g. `jarlet plugin track myserver WorldEdit --track minor`.
 
 ## What Jarlet handles
 
@@ -106,23 +110,12 @@ jarlet start my-server --accept-eula --foreground
 - Missing plugin dependency warnings
 - Checksum verification where available and explicit trust for unknown external hosts
 
-- Server software: **Paper**
-- Plugin sources: **Hangar, Spiget, and GitHub Releases**
-
 Explore every command:
 
 ```bash
 jarlet --help
 jarlet plugin --help
 ```
-
-## Versioning
-
-Jarlet follows semantic versioning through `alpha`, `beta`, `rc`, and `stable`. See the [versioning guide](versioning-guide.md).
-=======
-`policy` controls how updates are picked: `track = "channel"` follows a named release channel (`channel = "..."`), `track = "minor"`/`"patch"` stays within a semver bound, and `pin = "<exact version>"` locks to one version. `[server].policy` and each plugin's `[plugins.policy]` work the same way. Pass your own template file to `jarlet setup <name> <template-file>` to start from something other than the default.
-
-Change a policy after the fact with `jarlet track`/`jarlet plugin track` instead of hand-editing `jarlet.toml`, e.g. `jarlet plugin track myserver WorldEdit --track minor`.
 
 ---
 
@@ -139,5 +132,4 @@ Jarlet installs and starts a server with no configuration required. Set these (i
 
 ## Versioning
 
-See the [versioning guide](versioning-guide.md).
->>>>>>> dev
+Jarlet follows semantic versioning through `alpha`, `beta`, `rc`, and `stable`. See the [versioning guide](versioning-guide.md).
