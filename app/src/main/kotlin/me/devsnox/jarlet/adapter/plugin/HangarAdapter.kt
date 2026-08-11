@@ -65,6 +65,7 @@ object HangarAdapter : PluginSourceAdapter {
     private val json = Json { ignoreUnknownKeys = true }
 
     private val hangarApi: String by lazy { SysConfig.default().value("HANGAR_API") }
+    private val envFilePath: String by lazy { SysConfig.default().value("ENV_FILE_PATH") }
     private val versionListLimit: Int by lazy { SysConfig.default().value("HANGAR_VERSION_LIST_LIMIT").toInt() }
     private val versionListMaxPages: Int by lazy { SysConfig.default().value("HANGAR_VERSION_LIST_MAX_PAGES").toInt() }
 
@@ -74,7 +75,7 @@ object HangarAdapter : PluginSourceAdapter {
     private fun authenticate() {
         val apiKey = System.getenv("JARLET_HANGAR_API_KEY")?.takeIf { it.isNotEmpty() }
             ?: throw HangarAdapterException(
-                "JARLET_HANGAR_API_KEY is not set. Export your Hangar API key first: export JARLET_HANGAR_API_KEY='<your-hangar-api-key>'",
+                "JARLET_HANGAR_API_KEY is not set. Export it (export JARLET_HANGAR_API_KEY='<your-hangar-api-key>') or set it permanently in $envFilePath",
             )
 
         val response = try {
