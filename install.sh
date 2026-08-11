@@ -445,11 +445,37 @@ if as_root test -L "$ENV_FILE"; then
 fi
 
 if ! as_root test -e "$ENV_FILE"; then
+  readonly TEMPORARY_ENV_TEMPLATE="${TEMPORARY_DIRECTORY}/jarlet.env"
+
+  cat > "$TEMPORARY_ENV_TEMPLATE" <<'ENV_TEMPLATE'
+# Jarlet environment file.
+#
+# Every setting below is optional and commented out. Uncomment a line and
+# fill in a value to enable it; leave it as-is to use Jarlet's default.
+
+# Raises GitHub's unauthenticated API rate limit (60 req/hr) to 5000 req/hr
+# when installing/updating GitHub-releases-sourced plugins.
+#JARLET_GITHUB_TOKEN=
+
+# Required to install or update Hangar-sourced plugins; Hangar requires
+# authentication for essentially every endpoint. Exchanged for a short-lived
+# JWT on demand.
+#JARLET_HANGAR_API_KEY=
+
+# Overrides where Jarlet's own files (currently: the trusted external
+# sources list) live. Defaults to ~/jarlet.
+#JARLET_HOME=
+
+# Overrides where server instances live. Must be an absolute path if set.
+# Defaults to ~/jarlet/servers.
+#JARLET_SERVERS_DIR=
+ENV_TEMPLATE
+
   as_root install \
     -o root \
     -g "$SERVICE_GROUP" \
     -m 0640 \
-    /dev/null \
+    "$TEMPORARY_ENV_TEMPLATE" \
     "$ENV_FILE"
 fi
 
