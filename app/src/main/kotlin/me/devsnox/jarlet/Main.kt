@@ -12,6 +12,8 @@ import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.versionOption
 import com.github.ajalt.mordant.terminal.Terminal
 import me.devsnox.jarlet.config.JarletVersion
+import me.devsnox.jarlet.config.SelfUpdateChecker
+import me.devsnox.jarlet.config.SysConfig
 import me.devsnox.jarlet.command.PluginCommand
 import me.devsnox.jarlet.command.InstallCommand
 import me.devsnox.jarlet.command.SetupCommand
@@ -55,4 +57,11 @@ class Jarlet : CliktCommand(name = "jarlet") {
     }
 }
 
-fun main(args: Array<String>) = Jarlet().main(args)
+fun main(args: Array<String>) {
+    val updateCheckThread = SelfUpdateChecker.maybeCheckAsync()
+    Jarlet().main(args)
+    val joinTimeoutSeconds = SysConfig.default().value("SELF_UPDATE_JOIN_TIMEOUT_SECONDS").toLongOrNull()
+    if (updateCheckThread != null && joinTimeoutSeconds != null) {
+        updateCheckThread.join(joinTimeoutSeconds * 1000)
+    }
+}

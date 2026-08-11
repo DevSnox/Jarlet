@@ -15,6 +15,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
+import java.time.Duration
 import java.util.Base64
 import java.util.HexFormat
 import kotlin.collections.iterator
@@ -71,8 +72,11 @@ object SharedHttp {
      * here -- callers decide what a given status means (a 404 is "skip"
      * for github, but a hard failure for hangar/spiget).
      */
-    fun get(url: String, headers: Map<String, String> = emptyMap()): Response {
-        val request = requestBuilder(url, headers).GET().build()
+    /** [timeoutSeconds], when given, bounds the request instead of waiting indefinitely -- every other caller leaves it unset. */
+    fun get(url: String, headers: Map<String, String> = emptyMap(), timeoutSeconds: Long? = null): Response {
+        var builder = requestBuilder(url, headers)
+        if (timeoutSeconds != null) builder = builder.timeout(Duration.ofSeconds(timeoutSeconds))
+        val request = builder.GET().build()
         val start = System.currentTimeMillis()
         val response = send(request, HttpResponse.BodyHandlers.ofString())
         Log.debug("GET $url -> ${response.statusCode()} (${System.currentTimeMillis() - start}ms)")
