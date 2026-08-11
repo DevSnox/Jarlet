@@ -8,12 +8,12 @@ import java.nio.file.Paths
 /**
  * Shared server-instance name/path helpers -- Kotlin port of the pieces of
  * `src/lib/lib.sh` (`servers_root()`, `template_filename()`, and the
- * `^[0-9A-Za-z._-]+$` name-validation regex repeated across
+ * `^[0-9A-Za-z_-]+$` name-validation regex repeated across
  * `install.sh`/`setup.sh`/`start.sh`/`stop.sh`) every server lifecycle
  * command needs.
  */
 object ServerPaths {
-    private val VALID_NAME = Regex("^[0-9A-Za-z._-]+$")
+    private val VALID_NAME = Regex("^[0-9A-Za-z_-]+$")
 
     /**
      * JVM-system-property override for [serversRoot], checked before the
@@ -31,7 +31,7 @@ object ServerPaths {
     /** Validates a server instance name, failing the way every bash script's inline check does. */
     fun validateName(name: String): String {
         if (!VALID_NAME.matches(name)) {
-            throw ServerCommandException("Server name must be a simple name (letters, digits, ._-)")
+            throw ServerCommandException("Server name must be a simple name (letters, digits, _-)")
         }
         return name
     }
