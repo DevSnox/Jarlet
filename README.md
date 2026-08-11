@@ -1,79 +1,98 @@
-> Warning: Jarlet is under active development and pre BETA. Features, commands, and configuration formats may change or break. Do not use it for important production servers without backups.
+> [!WARNING]
+> Jarlet is an early alpha. Commands and configuration may change. Back up important servers before testing.
+[![Build native release](https://github.com/DevSnox/Jarlet/actions/workflows/build-native.yml/badge.svg)](https://github.com/DevSnox/Jarlet/actions/workflows/build-native.yml)
 
 # Jarlet
-Jarlet is a lightweight package manager that builds and runs complete Minecraft servers from safe, versioned templates.
 
-It downloads verified server software and plugins, manages runtime configuration, and starts a ready-to-play server with minimal setup.
+**Install and run minecraft servers and plugins from one config without manual handling.**
 
-# Sources
+Jarlet installs and updates server package and plugins based on templates.
 
-## Supported
-- PaperMc
+## Get started
 
-## Request
-Please open an issue, if you'd like to request another source to be included.
+Jarlet currently supports **Linux and MacOS**. You also need a Java runtime compatible with the Minecraft version you want to run.
 
-# Usage
+### 1. Install Jarlet
 
-Clone this repo. Go into jarlet.toml and change configurations if needed.
-Standart settings:
+Install the latest alpha release:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/DevSnox/Jarlet/main/install.sh \
+  | env JARLET_CHANNEL=alpha bash
+```
+
+The installer:
+
+- downloads the correct Linux binary from GitHub Releases;
+- verifies its GitHub SHA-256 digest and published checksum;
+- installs `jarlet` to `/usr/local/bin`;
+- uses `sudo` only when the install directory requires it.
+
+Confirm it is ready:
+
+```bash
+jarlet --version
+```
+
+### 2. Start your first server
+
+```bash
+jarlet start my-server --accept-eula --foreground
+```
+
+That one command creates the server under `~/jarlet/servers/my-server`, downloads the latest stable Paper build for the bundled template, writes the basic configuration, and starts Paper in your terminal.
+
+Read the [Minecraft EULA](https://aka.ms/MinecraftEULA) before using `--accept-eula`.
+
+Stop a foreground server with <kbd>Ctrl</kbd>+<kbd>C</kbd>. For a server started without `--foreground`, run:
+
+```bash
+jarlet stop my-server
+```
+
+## Use your own template
+
+Create a `jarlet.toml` file:
+
 ```toml
-# jarlet.toml
 [template]
-name = "default"
-description = "Default Jarlet server template"
+name = "my-server"
+description = "My Paper server"
 
 [server]
+package = "paper"
 minecraft_version = "26.2"
 memory = "2G"
 port = 25565
 online_mode = true
 ```
 
-## Setup the jarlet command
-
-> It's planned to extend jarlet with a one command installer.
-
-Run these commands from the root of the Jarlet repository:
+Then build the server from it:
 
 ```bash
-mkdir -p "$HOME/.local/bin"
-ln -sfn "$PWD/src/jarlet" "$HOME/.local/bin/jarlet"
+jarlet setup my-server ./jarlet.toml
+jarlet start my-server --accept-eula --foreground
 ```
 
-Check which shell you use:
+## What Jarlet handles
+
+- Versioned server templates
+- Verified Paper downloads
+- Foreground and background server processes
+- Plugin add, list, update, pin, and removal
+- Missing plugin dependency warnings
+- Checksum verification where available and explicit trust for unknown external hosts
+
+- Server software: **Paper**
+- Plugin sources: **Hangar, Spiget, and GitHub Releases**
+
+Explore every command:
 
 ```bash
-echo "$SHELL"
+jarlet --help
+jarlet plugin --help
 ```
 
-If the result ends with `/zsh`, run:
+## Versioning
 
-```bash
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.zshrc"
-source "$HOME/.zshrc"
-```
-
-If the result ends with `/bash`, run:
-
-```bash
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
-source "$HOME/.bashrc"
-```
-
-Verify that Jarlet is available:
-
-```bash
-jarlet --version
-```
-
-This is a one-time setup and does not require `sudo`.
-
-Then, from any directory:
-
-```bash
-jarlet start <server-name> --accept-eula --foreground
-```
-
-# Versioning
-[Versioning guide](versioning-guide.md)
+Jarlet follows semantic versioning through `alpha`, `beta`, `rc`, and `stable`. See the [versioning guide](versioning-guide.md).
