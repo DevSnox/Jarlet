@@ -51,7 +51,7 @@ class UpdateCommandTest : CommandTestSupport() {
     fun `updating all with no declared plugins prints No plugins declared`() {
         writeServerToml("myserver")
 
-        val result = Jarlet().test(listOf("plugin", "update", "myserver"))
+        val result = Jarlet().test(listOf("plugin", "update", "myserver", "*"))
 
         assertEquals(0, result.statusCode)
         assertTrue(result.stdout.contains("No plugins declared"), "got: ${result.stdout}")
@@ -62,13 +62,23 @@ class UpdateCommandTest : CommandTestSupport() {
         val declared = JarletToml.Plugin(source = "not-a-real-source", id = "SomePlugin")
         writeServerToml("myserver", defaultToml(plugins = listOf(declared)))
 
-        val result = Jarlet().test(listOf("plugin", "update", "myserver"))
+        val result = Jarlet().test(listOf("plugin", "update", "myserver", "*"))
 
         assertEquals(0, result.statusCode)
         assertTrue(
             result.stdout.contains("""Skipping "SomePlugin" (not-a-real-source): no adapter is implemented"""),
             "got: ${result.stdout}",
         )
+    }
+
+    @Test
+    fun `updating with no identifier is rejected`() {
+        writeServerToml("myserver")
+
+        val result = Jarlet().test(listOf("plugin", "update", "myserver"))
+
+        assertEquals(1, result.statusCode)
+        assertTrue(result.stderr.contains("identifier", ignoreCase = true), "got: ${result.stderr}")
     }
 
     @Test

@@ -3,7 +3,6 @@ package me.devsnox.jarlet.command
 import me.devsnox.jarlet.command.lib.JarletCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.parameters.arguments.argument
-import com.github.ajalt.clikt.parameters.arguments.optional
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import me.devsnox.jarlet.command.lib.resolvePluginCommandContext
@@ -15,12 +14,12 @@ import me.devsnox.jarlet.plugin.PluginRouter
 import me.devsnox.jarlet.plugin.SourceResolver
 
 /**
- * `jarlet plugin update <name> [<identifier>] [--trust]` -- Kotlin port of
+ * `jarlet plugin update <name> <identifier> [--trust]` -- Kotlin port of
  * `src/plugin/router.sh`'s `run_update_all()`/`run_update_one()` split, as
  * exposed through `plugin.sh`'s `update` subcommand in `commands.sh`'s
  * doc comments.
  *
- * With no `identifier`, updates every plugin declared in the server's
+ * With identifier `"*"`, updates every plugin declared in the server's
  * `jarlet.toml` ([me.devsnox.jarlet.plugin.PluginRouter.routeAll]) -- the Kotlin equivalent of both
  * `update` with no target *and* bash's bare `plugins.sh <name>` (no
  * subcommand at all) default, which this subcommand-first CLI shape folds
@@ -46,7 +45,7 @@ class UpdateCommand : JarletCommand(name = "update") {
     override fun help(context: Context) = "Fetch the latest matching version for one or all declared plugins."
 
     private val name by argument(name = "name", help = "Server name (a directory under the servers root).")
-    private val identifier by argument(name = "identifier", help = "Update only this declared plugin id (default: update all).").optional()
+    private val identifier by argument(name = "identifier", help = "Declared plugin id to update, or \"*\" to update everything declared.")
 
     private val trust by option("--trust", help = "Proceed past an external-hosting gate this adapter can't otherwise resolve.")
         .flag(default = false)
@@ -61,8 +60,7 @@ class UpdateCommand : JarletCommand(name = "update") {
         val pluginsDir = serverDir.resolve("plugins")
         Files.createDirectories(pluginsDir)
 
-        val target = identifier
-        if (target == null) {
+        if (identifier == "*") {
             PluginRouter.routeAll(serverDir, pluginsDir, toml.plugins, trust)
 
             var currentToml = toml
@@ -76,9 +74,9 @@ class UpdateCommand : JarletCommand(name = "update") {
                 }
             }
         } else {
-            PluginRouter.routeOne(serverDir, pluginsDir, toml, target, trust)
+            PluginRouter.routeOne(serverDir, pluginsDir, toml, identifier, trust)
 
-            val resolved = SourceResolver.resolveDeclaredIdentifier(toml, target, "update")
+            val resolved = SourceResolver.resolveDeclaredIdentifier(toml, identifier, "update")
             PluginDependencyChecker.checkAndResolve(
                 serverDir, pluginsDir, tomlFile, toml, resolved.source, resolved.id, resolveDependencies, trust,
             )

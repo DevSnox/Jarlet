@@ -22,7 +22,7 @@ import com.github.ajalt.clikt.core.subcommands
  * bash's bare `plugins.sh <name>` (no subcommand at all) defaulting to
  * "update everything declared" has no natural equivalent in this
  * subcommand-first shape and is deliberately dropped -- `jarlet plugin
- * update <name>` (see [UpdateCommand]) is the equivalent, explicit form.
+ * update <name> *` (see [UpdateCommand]) is the equivalent, explicit form.
  *
  * This group itself has no behavior of its own (mirrors `plugin.sh`'s
  * `main()`, which is pure dispatch once past its shared setup).
