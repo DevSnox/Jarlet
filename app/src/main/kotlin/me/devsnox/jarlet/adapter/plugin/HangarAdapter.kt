@@ -7,7 +7,9 @@ import me.devsnox.jarlet.config.SysConfig
 import me.devsnox.jarlet.config.JarletToml
 import me.devsnox.jarlet.plugin.ExternalUrlRedirector
 import me.devsnox.jarlet.config.InstalledVersion
+import me.devsnox.jarlet.lib.SemVer
 import me.devsnox.jarlet.lib.SharedHttp
+import me.devsnox.jarlet.lib.pickHighestWithinBound
 import me.devsnox.jarlet.plugin.PluginSourceAdapter
 import me.devsnox.jarlet.config.PluginStateStore
 import me.devsnox.jarlet.plugin.UntrustedExternalDownloader
@@ -63,6 +65,8 @@ object HangarAdapter : PluginSourceAdapter {
     private val json = Json { ignoreUnknownKeys = true }
 
     private val hangarApi: String by lazy { SysConfig.default().value("HANGAR_API") }
+    private val versionListLimit: Int by lazy { SysConfig.default().value("HANGAR_VERSION_LIST_LIMIT").toInt() }
+    private val versionListMaxPages: Int by lazy { SysConfig.default().value("HANGAR_VERSION_LIST_MAX_PAGES").toInt() }
 
     /** In-memory JWT for this process only -- see the class doc for why this never round-trips back out to the environment the way the bash version's `export` attempted to. */
     private var jwt: String? = System.getenv("JARLET_HANGAR_JWT")?.takeIf { it.isNotEmpty() }
@@ -146,10 +150,51 @@ object HangarAdapter : PluginSourceAdapter {
         }
 
         val channel = policy.channel ?: "Release"
-        val targetVersion = if (!policy.pin.isNullOrEmpty()) {
-            policy.pin
+
+        // Gated the same way as GithubAdapter/SpigetAdapter: only
+        // pin.isNullOrEmpty() && track in {minor, patch} deviates from
+        // today's plain /latest?channel=X behavior.
+        val useTrackBound = policy.pin.isNullOrEmpty() && (policy.track == "minor" || policy.track == "patch")
+        val baseline = if (useTrackBound) {
+            PluginStateStore.read(serverDir, sourceName, slug)?.versionName?.let { SemVer.parse(it) }
         } else {
-            get("/projects/$slug/latest?channel=$channel").trim()
+            null
+        }
+
+        val targetVersion = when {
+            !policy.pin.isNullOrEmpty() -> policy.pin
+            useTrackBound && baseline != null -> {
+                val entries = fetchVersionListEntries(slug, channel)
+                if (entries == null) {
+                    // The list endpoint's response shape is unverified
+                    // against a live Hangar API in this codebase (see class
+                    // doc) -- any network/parse failure is treated as "the
+                    // shape assumption was wrong" and degrades gracefully
+                    // rather than breaking update/start for every
+                    // Hangar-sourced plugin using minor/patch tracking.
+                    Log.debug(
+                        "could not use Hangar's version list for \"$slug\" (track=${policy.track}); falling back to latest for channel",
+                    )
+                    get("/projects/$slug/latest?channel=$channel").trim()
+                } else {
+                    val eligible = entries.filter { (it.reviewState ?: "") in RECOGNIZED_REVIEW_STATES }
+                    val picked = pickHighestWithinBound(eligible, { it.name ?: "" }, baseline, policy.track!!)
+                    if (picked == null) {
+                        Log.info("No $slug version within the track=${policy.track} bound of the installed version was found")
+                        return
+                    }
+                    // Non-null: any entry that survived pickHighestWithinBound
+                    // matched SemVer.parse(it.name ?: ""), which only ever
+                    // succeeds for a non-null, non-empty name.
+                    picked.name!!
+                }
+            }
+            else -> {
+                if (useTrackBound) {
+                    Log.debug("no semver baseline installed for \"$slug\" yet; falling back to latest for channel=$channel")
+                }
+                get("/projects/$slug/latest?channel=$channel").trim()
+            }
         }
 
         if (targetVersion.isEmpty()) {
@@ -278,6 +323,39 @@ object HangarAdapter : PluginSourceAdapter {
         Log.info("SHA-256: $expectedHash")
     }
 
+    /**
+     * Best-effort fetch of Hangar's project version *list* endpoint --
+     * `GET /projects/{slug}/versions?limit=X&offset=Y&channel=Z`, paginated
+     * up to [versionListMaxPages] pages of [versionListLimit] each (config
+     * values, `jarlet-sys.conf`). UNVERIFIED against a live Hangar
+     * response: this codebase has never called this endpoint before (only
+     * `/latest?channel=X` and `/versions/{name}`, see class doc), so the
+     * assumed `{ pagination: {...}, result: [...] }` wrapper shape may need
+     * adjustment on first real test run, the same way this file's other
+     * comments flag `reviewState`'s real enum values as discovered
+     * empirically. Any network or decode failure is caught and folded into
+     * a `null` return -- callers fall back to `/latest?channel=X` rather
+     * than propagating a hard failure, since a wrong shape assumption here
+     * must degrade gracefully, not break every Hangar-sourced
+     * minor/patch-tracked plugin.
+     */
+    private fun fetchVersionListEntries(slug: String, channel: String): List<HangarVersionListEntry>? =
+        try {
+            val entries = mutableListOf<HangarVersionListEntry>()
+            for (page in 0 until versionListMaxPages) {
+                val offset = page * versionListLimit
+                val body = get("/projects/$slug/versions?limit=$versionListLimit&offset=$offset&channel=$channel")
+                val parsed = json.decodeFromString(HangarVersionListResponse.serializer(), body)
+                entries += parsed.result
+
+                // Fewer than a full page means we've reached the end of the list.
+                if (parsed.result.size < versionListLimit) break
+            }
+            entries
+        } catch (e: Exception) {
+            null
+        }
+
     @Serializable
     private data class HangarAuthResponse(val token: String? = null)
 
@@ -295,6 +373,26 @@ object HangarAdapter : PluginSourceAdapter {
 
     @Serializable
     private data class HangarChannel(val name: String? = null)
+
+    /**
+     * Best-effort response wrapper for the version-*list* endpoint --
+     * see [fetchVersionListEntries]'s doc comment: UNVERIFIED against a
+     * live response, assumed to follow Hangar API v1's usual paginated-list
+     * shape (`{ pagination: {...}, result: [...] }`); `pagination` itself
+     * is never read since page-end is instead detected the same way
+     * [SpigetAdapter.resolvePinnedVersion] does (a short page).
+     */
+    @Serializable
+    private data class HangarVersionListResponse(val result: List<HangarVersionListEntry> = emptyList())
+
+    /** One entry of [HangarVersionListResponse.result] -- see its doc comment for the same unverified-shape caveat. */
+    @Serializable
+    private data class HangarVersionListEntry(
+        val name: String? = null,
+        val channel: HangarChannel? = null,
+        val visibility: String? = null,
+        val reviewState: String? = null,
+    )
 
     @Serializable
     private data class HangarDownload(

@@ -3,7 +3,9 @@ package me.devsnox.jarlet.server
 import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.adapter.server.ServerSoftwareAdapters
 import me.devsnox.jarlet.command.lib.ServerCommandException
+import me.devsnox.jarlet.config.InstalledServer
 import me.devsnox.jarlet.config.JarletToml
+import me.devsnox.jarlet.config.ServerStateStore
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -59,7 +61,16 @@ internal object ServerSetup {
 
             val serverJar = serverDir.resolve("server.jar")
             if (!Files.isRegularFile(serverJar)) {
-                adapter.install(server.minecraftVersion, serverJar, server.policy)
+                val installedVersion = adapter.install(server.minecraftVersion, serverJar, server.policy)
+                // Pre-existing gap closed here: without this, StartCommand's
+                // own drift-check (ServerStateStore.read(serverDir) ==
+                // null) would see no recorded state right after a fresh
+                // `jarlet setup` and unconditionally reinstall on the very
+                // next `jarlet start`, wasting a redundant network
+                // round-trip every first run. Mirrors exactly what
+                // StartCommand now does with adapter.install()'s return
+                // value.
+                ServerStateStore.write(serverDir, InstalledServer(pkg = server.pkg, minecraftVersion = installedVersion))
             }
 
             val eulaFile = serverDir.resolve("eula.txt")

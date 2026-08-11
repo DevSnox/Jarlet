@@ -187,6 +187,25 @@ class ListCommandTest : CommandTestSupport() {
         assertTrue(result.stdout.contains("--page 2"), "got: ${result.stdout}")
     }
 
+    @Test
+    fun `a track = minor or patch policy displays track, not a dash`() {
+        writeServerToml(
+            "myserver",
+            defaultToml(
+                plugins = listOf(
+                    JarletToml.Plugin(source = "github", id = "owner/minor-repo", policy = JarletToml.Policy(track = "minor")),
+                    JarletToml.Plugin(source = "github", id = "owner/patch-repo", policy = JarletToml.Policy(track = "patch")),
+                ),
+            ),
+        )
+
+        val result = Jarlet().test(listOf("plugin", "list", "myserver"))
+
+        assertEquals(0, result.statusCode)
+        assertTrue(result.stdout.contains("track: minor"), "got: ${result.stdout}")
+        assertTrue(result.stdout.contains("track: patch"), "got: ${result.stdout}")
+    }
+
     private fun declaredPlugin(
         source: String,
         id: String,

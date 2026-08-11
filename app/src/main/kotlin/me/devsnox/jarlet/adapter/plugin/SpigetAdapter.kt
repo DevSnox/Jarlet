@@ -8,7 +8,9 @@ import me.devsnox.jarlet.config.JarletToml
 import me.devsnox.jarlet.config.SysConfig
 import me.devsnox.jarlet.plugin.ExternalUrlRedirector
 import me.devsnox.jarlet.config.InstalledVersion
+import me.devsnox.jarlet.lib.SemVer
 import me.devsnox.jarlet.lib.SharedHttp
+import me.devsnox.jarlet.lib.pickHighestWithinBound
 import me.devsnox.jarlet.plugin.PluginSourceAdapter
 import me.devsnox.jarlet.config.PluginStateStore
 import me.devsnox.jarlet.plugin.UntrustedExternalDownloader
@@ -66,6 +68,8 @@ object SpigetAdapter : PluginSourceAdapter {
     private val json = Json { ignoreUnknownKeys = true }
 
     private val spigetApi: String by lazy { SysConfig.default().value("SPIGET_API") }
+    private val versionListPageSize: Int by lazy { SysConfig.default().value("SPIGET_VERSION_LIST_PAGE_SIZE").toInt() }
+    private val versionListMaxPages: Int by lazy { SysConfig.default().value("SPIGET_VERSION_LIST_MAX_PAGES").toInt() }
 
     /** Plain GET against `$SPIGET_API$path`. No auth header of any kind -- confirmed live that Spiget's API is fully anonymous. Mirrors `spiget_get()`. */
     private fun get(path: String): String {
@@ -111,6 +115,43 @@ object SpigetAdapter : PluginSourceAdapter {
         throw SpigetAdapterException(
             "Could not find pinned Spiget version '$pin' for resource '$id' (searched up to 500 most recent versions)",
         )
+    }
+
+    /**
+     * Pages through `GET /resources/$id/versions` newest-first, bounded by
+     * `SPIGET_VERSION_LIST_MAX_PAGES` pages of
+     * `SPIGET_VERSION_LIST_PAGE_SIZE` each (per `jarlet-sys.conf`), and
+     * picks the highest version within [track]'s bound of [baseline] via
+     * [pickHighestWithinBound] (using each version's human-readable `name`
+     * field). Returns null if none qualify. Mirrors
+     * [resolvePinnedVersion]'s bounded-page-scan structure exactly, but
+     * reads its page size/page count from config instead of that
+     * function's own hardcoded `100`/`5` -- [resolvePinnedVersion] itself
+     * is untouched.
+     */
+    private fun fetchVersionWithinBound(id: String, baseline: SemVer, track: String): SpigetVersionResponse? {
+        val candidates = mutableListOf<SpigetVersionResponse>()
+
+        for (page in 1..versionListMaxPages) {
+            val pageJson = try {
+                get("/resources/$id/versions?size=$versionListPageSize&page=$page&sort=-releaseDate")
+            } catch (e: SpigetAdapterException) {
+                throw SpigetAdapterException("Could not list versions for '$id' while resolving track=$track bound")
+            }
+
+            val versions = try {
+                json.decodeFromString(ListSerializer(SpigetVersionResponse.serializer()), pageJson)
+            } catch (e: Exception) {
+                throw SpigetAdapterException("Could not list versions for '$id' while resolving track=$track bound")
+            }
+
+            candidates += versions
+
+            // Fewer than a full page means we've reached the end of the list.
+            if (versions.size < versionListPageSize) break
+        }
+
+        return pickHighestWithinBound(candidates, { it.name ?: "" }, baseline, track)
     }
 
     /**
@@ -206,6 +247,32 @@ object SpigetAdapter : PluginSourceAdapter {
         }
 
         val pin = policy.pin
+
+        // Same gating as GithubAdapter: only pin.isNullOrEmpty() &&
+        // track in {minor, patch} deviates from today's behavior. Spiget
+        // has no channel concept, so there's no other existing "track"
+        // branch to preserve here.
+        val useTrackBound = pin.isNullOrEmpty() && (policy.track == "minor" || policy.track == "patch")
+        val baseline = if (useTrackBound) {
+            // The installed baseline's *human* version name -- versionName
+            // in plugins-state.json is the version uuid, not a human name
+            // (see the comment on that write() call below), so it isn't
+            // semver-parseable directly. versionId (the numeric id) is also
+            // recorded, so it's fetched back out here.
+            val installedVersionId = PluginStateStore.read(serverDir, sourceName, id)?.versionId
+            installedVersionId?.let { versionId ->
+                try {
+                    val installedMeta =
+                        json.decodeFromString(SpigetVersionResponse.serializer(), get("/resources/$id/versions/$versionId"))
+                    installedMeta.name?.let { SemVer.parse(it) }
+                } catch (e: Exception) {
+                    null
+                }
+            }
+        } else {
+            null
+        }
+
         val targetVersion = when {
             !pin.isNullOrEmpty() && NUMERIC.matches(pin) -> try {
                 json.decodeFromString(SpigetVersionResponse.serializer(), get("/resources/$id/versions/$pin"))
@@ -213,10 +280,20 @@ object SpigetAdapter : PluginSourceAdapter {
                 throw SpigetAdapterException("Could not fetch pinned version '$pin' for '$id'")
             }
             !pin.isNullOrEmpty() -> resolvePinnedVersion(id, pin)
-            else -> try {
-                json.decodeFromString(SpigetVersionResponse.serializer(), get("/resources/$id/versions/latest"))
-            } catch (e: SpigetAdapterException) {
-                throw SpigetAdapterException("Could not resolve latest version for '$id'")
+            useTrackBound && baseline != null ->
+                fetchVersionWithinBound(id, baseline, policy.track!!) ?: run {
+                    Log.info("No $id version within the track=${policy.track} bound of the installed version was found")
+                    return
+                }
+            else -> {
+                if (useTrackBound) {
+                    Log.debug("no semver baseline installed for \"$id\" yet; falling back to latest for track=${policy.track}")
+                }
+                try {
+                    json.decodeFromString(SpigetVersionResponse.serializer(), get("/resources/$id/versions/latest"))
+                } catch (e: SpigetAdapterException) {
+                    throw SpigetAdapterException("Could not resolve latest version for '$id'")
+                }
             }
         }
 
