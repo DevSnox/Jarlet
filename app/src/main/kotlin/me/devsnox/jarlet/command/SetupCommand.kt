@@ -9,7 +9,7 @@ import me.devsnox.jarlet.command.lib.serverCommandBody
 import me.devsnox.jarlet.server.ServerSetup
 
 /**
- * `jarlet setup <name> [template-file]` -- Kotlin port of `src/server/setup.sh`.
+ * `jarlet setup <name> [template-file]`
  *
  * Materializes a new server instance directory from a `jarlet.toml`-shaped
  * template; the actual work lives in [me.devsnox.jarlet.server.ServerSetup.ensure] so [StartCommand]

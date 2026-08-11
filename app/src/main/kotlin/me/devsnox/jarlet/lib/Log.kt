@@ -3,10 +3,10 @@ package me.devsnox.jarlet
 import java.io.PrintStream
 
 /**
- * Hand-rolled process-global logger -- see
- * `prototyping/documentation/concepts/logging.md` for the full rationale
- * (no SLF4J/Logback/kotlin-logging: GraalVM native-image reflection
- * friction for a CLI that needs four print functions and a boolean).
+ * Hand-rolled process-global logger: no SLF4J/Logback/kotlin-logging,
+ * since a CLI that needs a handful of print functions and a debug flag
+ * doesn't warrant the GraalVM native-image reflection friction those
+ * bring.
  *
  * Plain top-level `object`, no `CliktCommand` dependency -- reachable from
  * anywhere, including non-command singletons like `SharedHttp` and the
@@ -47,7 +47,7 @@ object Log {
         if (debugEnabled) err.println("[debug] $message")
     }
 
-    /** Always-shown, normal successful-path output (declaration confirmations, install summaries, etc). Written to stdout -- the stream this kind of user-facing output already used before this migration. */
+    /** Always-shown, normal successful-path output (declaration confirmations, install summaries, etc). Written to stdout. */
     fun info(message: String) = out.println(message)
 
     fun warn(message: String) = err.println("Warning: $message")

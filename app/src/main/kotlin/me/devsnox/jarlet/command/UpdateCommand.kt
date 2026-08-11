@@ -14,30 +14,20 @@ import me.devsnox.jarlet.plugin.PluginRouter
 import me.devsnox.jarlet.plugin.SourceResolver
 
 /**
- * `jarlet plugin update <name> <identifier> [--trust]` -- Kotlin port of
- * `src/plugin/router.sh`'s `run_update_all()`/`run_update_one()` split, as
- * exposed through `plugin.sh`'s `update` subcommand in `commands.sh`'s
- * doc comments.
+ * `jarlet plugin update <name> <identifier> [--trust]`
  *
  * With identifier `"*"`, updates every plugin declared in the server's
- * `jarlet.toml` ([me.devsnox.jarlet.plugin.PluginRouter.routeAll]) -- the Kotlin equivalent of both
- * `update` with no target *and* bash's bare `plugins.sh <name>` (no
- * subcommand at all) default, which this subcommand-first CLI shape folds
- * into one explicit form; see [PluginCommand]'s doc comment for why the
- * bare-invocation shortcut itself isn't reproduced.
+ * `jarlet.toml` ([me.devsnox.jarlet.plugin.PluginRouter.routeAll]).
  *
  * With an `identifier`, updates exactly that one declared plugin
  * ([me.devsnox.jarlet.plugin.PluginRouter.routeOne]), resolved against the declared entries by id
  * alone (source is not needed as CLI input -- ids are globally unique per
  * server).
  *
- * `--trust` may appear regardless of whether `identifier` is given,
- * mirroring `commands.sh`'s note that it "may appear anywhere alongside an
- * optional identifier" -- Clikt's option parsing handles this for free
- * (it's not positional), so there's no bespoke arg-loop needed here the
- * way bash's hand-rolled `while (( $# > 0 ))` required.
+ * `--trust` may appear regardless of whether `identifier` is given --
+ * Clikt's option parsing handles this for free since it's not positional.
  *
- * Fully wired against [me.devsnox.jarlet.plugin.PluginRouter.routeAll]/[me.devsnox.jarlet.plugin.PluginRouter.routeOne] and
+ * Wired against [me.devsnox.jarlet.plugin.PluginRouter.routeAll]/[me.devsnox.jarlet.plugin.PluginRouter.routeOne] and
  * [me.devsnox.jarlet.plugin.AdapterRegistry]'s three registered adapters.
  */
 class UpdateCommand : JarletCommand(name = "update") {

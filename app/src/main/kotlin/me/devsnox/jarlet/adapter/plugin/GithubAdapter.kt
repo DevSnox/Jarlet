@@ -25,15 +25,11 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 
-/** Thrown for the same failure cases `fail()` covers throughout `src/adapter/plugin/github-releases.sh`. */
+/** Thrown for GitHub Releases request/parse/verification failures. */
 class GithubAdapterException(message: String) : Exception(message)
 
 /**
- * GitHub Releases plugin source adapter -- Kotlin port of
- * `src/adapter/plugin/github-releases.sh`. See that file's header comment
- * for the full research this implements
- * (`prototyping/documentation/sources/github-releases-plugin-fetching.md`);
- * summarized here:
+ * GitHub Releases plugin source adapter.
  *
  *   - [id] is `"owner/repo"` (e.g. `"ViaVersion/ViaVersion"`), not a
  *     searchable slug/resource id -- the caller must already know it.
@@ -57,9 +53,8 @@ class GithubAdapterException(message: String) : Exception(message)
  *
  * Assets are decoded as raw [JsonObject]s rather than a typed data class
  * because the tie-break field name itself is configurable
- * (`GITHUB_ASSET_TIEBREAK_FIELD`) and looked up dynamically -- mirroring
- * `github_releases_pick_asset()`'s `jq --arg field ... max_by(.[$field])`,
- * which is genuinely dynamic, not hardcoded to `download_count`.
+ * (`GITHUB_ASSET_TIEBREAK_FIELD`) and looked up dynamically, not hardcoded
+ * to `download_count`.
  */
 object GithubAdapter : PluginSourceAdapter, PluginUrlMatcher {
     override val sourceName: String = "github"
@@ -113,11 +108,9 @@ object GithubAdapter : PluginSourceAdapter, PluginUrlMatcher {
     }
 
     /**
-     * Recognizes GitHub repo/release URLs -- see the class doc and
-     * `src/adapter/plugin/github-releases.sh`'s `github_releases_match_url()`
-     * for the exact shapes recognized (with or without a trailing slash,
-     * `http://`/`https://`; `www.github.com` is never used by GitHub
-     * itself, so not matched):
+     * Recognizes GitHub repo/release URLs (with or without a trailing
+     * slash, `http://`/`https://`; `www.github.com` is never used by
+     * GitHub itself, so not matched):
      *   `github.com/{owner}/{repo}`
      *   `github.com/{owner}/{repo}/releases/tag/{tag}`
      *   `github.com/{owner}/{repo}/releases/download/{tag}/{asset-filename}`
@@ -277,9 +270,6 @@ object GithubAdapter : PluginSourceAdapter, PluginUrlMatcher {
                     throw GithubAdapterException("'$id' $tagName SHA-256 verification failed")
                 }
             } else {
-                // Log.info, not Log.warn -- see SpigetAdapter's equivalent
-                // comment: this was plain (stdout) println() before this
-                // migration, so the literal "Warning: " text is kept as-is.
                 Log.info("Warning: no digest published for \"$id\" $tagName asset; verified by size only")
             }
 
@@ -373,7 +363,6 @@ object GithubAdapter : PluginSourceAdapter, PluginUrlMatcher {
      * name patterns), then -- if more than one candidate survives -- picks
      * the one with the highest value of [tiebreakField]. Returns the
      * candidate count and the picked asset (`null` if the count is 0).
-     * Mirrors `github_releases_pick_asset()`.
      */
     private fun pickAsset(assets: List<JsonObject>): Pair<Int, JsonObject?> {
         val candidates = assets.filter { asset ->
@@ -401,9 +390,7 @@ object GithubAdapter : PluginSourceAdapter, PluginUrlMatcher {
      * rejection shape rather than a genuine access-denial/other failure:
      * `403` (occasionally `429`) with either `x-ratelimit-remaining: 0` or
      * a JSON body whose `message` field contains `"API rate limit exceeded"`.
-     * Per the proposal doc this exact convention isn't independently
-     * re-verified here (reusing prior research), so both signals are
-     * checked rather than relying on either alone.
+     * Both signals are checked rather than relying on either alone.
      */
     private fun isRateLimited(response: SharedHttp.Response): Boolean {
         if (response.status != 403 && response.status != 429) return false
@@ -421,9 +408,7 @@ object GithubAdapter : PluginSourceAdapter, PluginUrlMatcher {
      * `JARLET_GITHUB_TOKEN` only if it isn't already set (telling a user who
      * already set one to "set one" would be actively confusing), and
      * includes a human-readable reset time when `x-ratelimit-reset` (Unix
-     * epoch seconds) is present. The exact unauthenticated limit (~60/hr) is
-     * GitHub's documented approximate figure, not independently reconfirmed
-     * here, so it's not asserted as a precise number.
+     * epoch seconds) is present.
      */
     private fun rateLimitMessage(response: SharedHttp.Response): String {
         val hasToken = !System.getenv("JARLET_GITHUB_TOKEN").isNullOrEmpty()

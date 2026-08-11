@@ -13,23 +13,20 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 
-/** Thrown for the same failure cases `fail()` covers throughout `src/adapter/server/paper.sh`. */
+/** Thrown for Paper request/download/verification failures. */
 class PaperAdapterException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
 /**
- * Paper server-software adapter -- Kotlin port of `src/adapter/server/paper.sh`.
+ * Paper server-software adapter.
  *
  * Queries `PAPER_API` (fill.papermc.io's v3 API, see `jarlet-sys.conf`) for
  * the highest-numbered `STABLE` build of a given Minecraft version,
  * downloads its `server:default` artifact, and verifies both size and
- * SHA-256 before installing it at the requested [Path] -- the same
- * validation sequence as `install_paper_server()`.
+ * SHA-256 before installing it at the requested [Path].
  *
  * HTTP GET, retried download (with truncated-transfer detection), and
  * SHA-256 hashing all delegate to [SharedHttp] -- the same plumbing the
- * plugin source adapters use -- rather than hand-rolling a second copy of
- * that code here (this adapter used to; see [SharedHttp]'s doc comment for
- * why it moved out of the plugin-only package it started in).
+ * plugin source adapters use, rather than a second copy of that code here.
  */
 object PaperAdapter : ServerSoftwareAdapter {
     override val id: String = "paper"
@@ -56,7 +53,7 @@ object PaperAdapter : ServerSoftwareAdapter {
         // Paper supports within that bound (no new HTTP call: `project`
         // above already lists every version Paper supports). Every other
         // policy shape (pin, track=latest/channel, no policy) resolves to
-        // exactly `minecraftVersion` unchanged, same as today.
+        // exactly `minecraftVersion` unchanged.
         val baseline = SemVer.parse(minecraftVersion)
         val resolvedVersion = if (baseline != null && (policy.track == "minor" || policy.track == "patch")) {
             val candidates = project.versions.values.flatten()
@@ -140,8 +137,7 @@ object PaperAdapter : ServerSoftwareAdapter {
     /**
      * Fetches [url] as text via [SharedHttp.get], folding every failure mode into a
      * [PaperAdapterException] whose message is prefixed with [errorPrefix] but distinguishes
-     * *why* -- network error, a non-2xx status (with the code), or an empty body -- since
-     * callers previously couldn't tell these apart.
+     * *why* -- network error, a non-2xx status (with the code), or an empty body.
      */
     private fun get(url: String, errorPrefix: String): String {
         val response = try {

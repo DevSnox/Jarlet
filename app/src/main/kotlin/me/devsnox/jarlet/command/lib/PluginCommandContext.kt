@@ -7,10 +7,10 @@ import me.devsnox.jarlet.server.ServerPaths
 
 /**
  * Shared "resolve a server by name, then load its jarlet.toml" preamble
- * duplicated identically across [me.devsnox.jarlet.command.ListCommand], [me.devsnox.jarlet.command.AddCommand],
- * [me.devsnox.jarlet.command.RemoveCommand], and [me.devsnox.jarlet.command.UpdateCommand] -- extracted once so the same
- * server-not-found/toml-not-found/parse-failure error messages don't drift
- * across the four call sites.
+ * used by [me.devsnox.jarlet.command.ListCommand], [me.devsnox.jarlet.command.AddCommand],
+ * [me.devsnox.jarlet.command.RemoveCommand], and [me.devsnox.jarlet.command.UpdateCommand] -- keeps the
+ * server-not-found/toml-not-found/parse-failure error messages consistent
+ * across call sites.
  */
 internal data class PluginCommandContext(val serverDir: Path, val tomlFile: Path, val toml: JarletToml)
 

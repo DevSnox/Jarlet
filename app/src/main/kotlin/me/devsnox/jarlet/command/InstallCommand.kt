@@ -9,14 +9,12 @@ import me.devsnox.jarlet.command.lib.serverCommandBody
 import java.nio.file.Paths
 
 /**
- * `jarlet install <minecraft-version> [target] [package]` -- Kotlin port
- * of `src/server/install.sh`.
+ * `jarlet install <minecraft-version> [target] [package]`
  *
- * Kept as its own subcommand for parity/direct use, though [SetupCommand]
- * and [StartCommand] call the resolved
+ * Kept as its own subcommand for direct use, though [SetupCommand] and
+ * [StartCommand] call the resolved
  * [me.devsnox.jarlet.adapter.server.ServerSoftwareAdapter] directly rather
- * than shelling out to this command the way `setup.sh`/`start.sh` invoke
- * `install.sh` as a subprocess.
+ * than invoking this command.
  */
 class InstallCommand : JarletCommand(name = "install") {
     override fun help(context: Context) = "Download and verify a server-software package."

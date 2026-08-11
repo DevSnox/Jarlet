@@ -12,21 +12,16 @@ import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.versionOption
 import com.github.ajalt.mordant.terminal.Terminal
 import me.devsnox.jarlet.config.JarletVersion
+import me.devsnox.jarlet.config.SelfUpdateChecker
+import me.devsnox.jarlet.config.SysConfig
 import me.devsnox.jarlet.command.PluginCommand
 import me.devsnox.jarlet.command.InstallCommand
 import me.devsnox.jarlet.command.SetupCommand
 import me.devsnox.jarlet.command.StartCommand
 import me.devsnox.jarlet.command.StopCommand
+import me.devsnox.jarlet.command.TrackCommand
 
-/**
- * Root command -- Kotlin equivalent of `src/jarlet`'s dispatcher.
- *
- * Phase 2 ("Server lifecycle vertical slice", see the migration plan) added
- * the `install`/`setup`/`start`/`stop` subcommands. Phase 3 ("Plugin
- * subsystem core") adds the `plugin` subcommand tree (currently just
- * `plugin list`, see [PluginCommand]/[me.devsnox.jarlet.command.ListCommand]
- * -- `add`/`remove`/`update` are phase 5).
- */
+/** Root command: dispatches to the server lifecycle and plugin subcommands. */
 class Jarlet : CliktCommand(name = "jarlet") {
 
     private val debug by option("--debug", help = "Print verbose diagnostic detail (HTTP calls, retries, timing).")
@@ -34,7 +29,7 @@ class Jarlet : CliktCommand(name = "jarlet") {
 
     init {
         versionOption(JarletVersion.VERSION)
-        subcommands(InstallCommand(), SetupCommand(), StartCommand(), StopCommand(), PluginCommand())
+        subcommands(InstallCommand(), SetupCommand(), StartCommand(), StopCommand(), TrackCommand(), PluginCommand())
 
         // Mordant's default Terminal() auto-detects the terminal width, which
         // resolves to 0 (or otherwise fails) under the GraalVM native-image
@@ -54,12 +49,19 @@ class Jarlet : CliktCommand(name = "jarlet") {
     override fun run() {
         if (debug) Log.enableDebug()
 
-        // Bare `jarlet` with no subcommand previously did nothing and exited
-        // 0. Print full help instead so the user gets useful instructions.
+        // Bare `jarlet` with no subcommand prints full help instead of
+        // silently exiting.
         if (currentContext.invokedSubcommand == null) {
             throw PrintHelpMessage(currentContext)
         }
     }
 }
 
-fun main(args: Array<String>) = Jarlet().main(args)
+fun main(args: Array<String>) {
+    val updateCheckThread = SelfUpdateChecker.maybeCheckAsync()
+    Jarlet().main(args)
+    val joinTimeoutSeconds = SysConfig.default().value("SELF_UPDATE_JOIN_TIMEOUT_SECONDS").toLongOrNull()
+    if (updateCheckThread != null && joinTimeoutSeconds != null) {
+        updateCheckThread.join(joinTimeoutSeconds * 1000)
+    }
+}

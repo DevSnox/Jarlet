@@ -8,19 +8,15 @@ import me.devsnox.jarlet.config.write
 /**
  * The shared "resolve, declare, fetch" sequence [me.devsnox.jarlet.command.AddCommand]
  * and [PluginDependencyChecker] each need to add exactly one `[[plugins]]`
- * entry to a `jarlet.toml` and then fetch it -- extracted per
- * `plugin-package-architecture-review.md` finding 1.2, which found both
- * callers had independently hand-rolled the same six-step sequence (resolve
- * -> [SourceResolver.checkIdAvailable] -> build a policy -> append the entry
- * -> write the toml -> [PluginRouter.route]), and that the drift between the
- * two copies had already caused one real bug: only [me.devsnox.jarlet.command.AddCommand]
- * printed the "rewrites in full" note before writing, so `add
- * --resolve-dependencies` only showed that warning once instead of once per
- * dependency actually declared.
+ * entry to a `jarlet.toml` and then fetch it: resolve -> check id
+ * availability ([SourceResolver.checkIdAvailable]) -> append the entry ->
+ * write the toml -> route the fetch ([PluginRouter.route]). Extracted so
+ * both callers stay consistent, including logging the "rewrites in full"
+ * note exactly once per declaration.
  *
  * Policy-*building* is deliberately kept out of this function and left to
- * each caller (per the review's Option C): [me.devsnox.jarlet.command.AddCommand]
- * supports `--pin`/`--channel` overrides with its own validation,
+ * each caller: [me.devsnox.jarlet.command.AddCommand] supports
+ * `--pin`/`--channel` overrides with its own validation,
  * [PluginDependencyChecker] always uses a fixed channel/Release policy, and
  * parameterizing a "policy-building strategy" here would be more machinery
  * than just having each caller build its own [JarletToml.Policy]

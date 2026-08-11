@@ -1,9 +1,9 @@
 package me.devsnox.jarlet.lib
 
 /**
- * Minimal semantic-version value used by the minor/patch auto-update policy
- * (see `prototyping/documentation/concepts/auto-update-policy.md`) --
- * shared across the plugin source adapters ([me.devsnox.jarlet.adapter.plugin.GithubAdapter],
+ * Minimal semantic-version value used by the minor/patch auto-update
+ * policy -- shared across the plugin source adapters
+ * ([me.devsnox.jarlet.adapter.plugin.GithubAdapter],
  * [me.devsnox.jarlet.adapter.plugin.SpigetAdapter], [me.devsnox.jarlet.adapter.plugin.HangarAdapter])
  * and [me.devsnox.jarlet.adapter.server.PaperAdapter], same as [SharedHttp]
  * is shared HTTP plumbing for those same adapters.

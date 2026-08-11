@@ -10,28 +10,18 @@ import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
 /**
- * Kotlin port of `src/plugin/resolve.sh` -- resolves a user-supplied CLI
- * identifier to a concrete `(source, id)` pair. See that file's header for
- * the full rationale (per-server global id uniqueness is what makes
- * resolving a bare identifier against already-declared entries
- * unambiguous, and is why `add` takes no `<source>` positional argument at
- * all any more).
+ * Resolves a user-supplied CLI identifier to a concrete `(source, id)`
+ * pair. Per-server global id uniqueness is what makes resolving a bare
+ * identifier against already-declared entries unambiguous, and is why
+ * `add` takes no `<source>` positional argument.
  *
- * Unlike [PluginRouter]/[AdapterRegistry] (see those files' doc comments
- * for their integration status), this class has no dependency on the
- * per-source adapters at all -- same as `resolve.sh` itself, it only talks
- * to Hangar's/Spiget's existence-probe endpoints directly, via the shared
- * [SharedHttp] plumbing (also landed as part of the phase 3/4 work
- * happening in parallel with this one), never through an adapter -- so it
- * is implemented here in full rather than against an assumed interface,
- * even though the module mapping table in the migration plan groups it
- * with phase 4 ("Plugin adapters"). It was ported as part of this phase,
- * since [me.devsnox.jarlet.command.AddCommand] hard-depends on it and neither phase 3 nor phase 4
- * had produced it yet when this phase started (see this port's final
- * report for the full status writeup).
+ * Unlike [PluginRouter]/[AdapterRegistry], this class has no dependency on
+ * the per-source adapters at all -- it talks to Hangar's/Spiget's
+ * existence-probe endpoints directly, via the shared [SharedHttp]
+ * plumbing, never through an adapter.
  */
 object SourceResolver {
-    /** A resolved `(source, id)` pair -- Kotlin equivalent of resolve.sh's `RESOLVED_SOURCE`/`RESOLVED_ID` "out parameters". */
+    /** A resolved `(source, id)` pair. */
     data class Resolved(val source: String, val id: String)
 
     class ResolutionException(message: String) : Exception(message)
@@ -41,13 +31,13 @@ object SourceResolver {
     @Serializable
     private data class SpigetResource(val name: String? = null, val id: Long? = null)
 
-    /** True if the Hangar project slug/id exists (2xx). Kotlin equivalent of `resolve_probe_hangar_project()`. */
+    /** True if the Hangar project slug/id exists (2xx). */
     private fun probeHangarProject(slugOrId: String): Boolean {
         val api = SysConfig.default().value("HANGAR_API")
         return SharedHttp.statusOnly("$api/projects/$slugOrId") in 200..299
     }
 
-    /** True if the Spiget resource id exists (2xx). Kotlin equivalent of `resolve_probe_spiget_resource()`. */
+    /** True if the Spiget resource id exists (2xx). */
     private fun probeSpigetResource(id: String): Boolean {
         val api = SysConfig.default().value("SPIGET_API")
         return SharedHttp.statusOnly("$api/resources/$id") in 200..299
@@ -55,8 +45,7 @@ object SourceResolver {
 
     /**
      * Searches Spiget by name, returning only results whose `name`
-     * case-insensitively EXACTLY matches (not substring/contains). Kotlin
-     * equivalent of `resolve_spiget_exact_name_matches()`.
+     * case-insensitively EXACTLY matches (not substring/contains).
      */
     private fun spigetExactNameMatches(name: String): List<SpigetResource> {
         val api = SysConfig.default().value("SPIGET_API")
@@ -78,12 +67,10 @@ object SourceResolver {
 
     /**
      * Resolves a bare `add <identifier>` (no `--source` override) to a
-     * `(source, id)` pair. Kotlin equivalent of `resolve_add_identifier()`
-     * -- see that function's doc comment for the exact algorithm
-     * (`owner/repo` -> github; all-digits -> probe hangar then
-     * spiget; otherwise -> hangar exact slug, else spiget exact-name
-     * search requiring exactly one match). Throws [ResolutionException] on
-     * no-match/ambiguous-match; never guesses.
+     * `(source, id)` pair: `owner/repo` -> github; all-digits -> probe
+     * hangar then spiget; otherwise -> hangar exact slug, else spiget
+     * exact-name search requiring exactly one match. Throws
+     * [ResolutionException] on no-match/ambiguous-match; never guesses.
      */
     fun resolveAddIdentifier(identifier: String): Resolved {
         if (identifier.contains('/')) {
@@ -96,8 +83,6 @@ object SourceResolver {
 
             return when {
                 hangarOk && spigetOk -> {
-                    // "Warning: " stripped from the literal here -- Log.warn()
-                    // prepends its own, so keeping both would double it up.
                     Log.warn(
                         "\"$identifier\" exists as both a Hangar project id and a Spiget resource id; " +
                             "defaulting to hangar (pass --source spiget to force the other)",
@@ -131,8 +116,7 @@ object SourceResolver {
 
     /**
      * Validates that `id` is the right shape for an explicit `--source`
-     * override, mirroring each adapter's own id-shape check. Kotlin
-     * equivalent of `resolve_validate_source_id_shape()`. Throws
+     * override, mirroring each adapter's own id-shape check. Throws
      * [ResolutionException] if invalid.
      */
     fun validateSourceIdShape(source: String, id: String) {
@@ -154,9 +138,8 @@ object SourceResolver {
 
     /**
      * Fails if `id` is already declared under ANY source (global
-     * per-server id uniqueness). Kotlin equivalent of
-     * `resolve_check_id_available()`. Throws [ResolutionException] if
-     * already declared.
+     * per-server id uniqueness). Throws [ResolutionException] if already
+     * declared.
      */
     fun checkIdAvailable(toml: JarletToml, id: String) {
         val existing = toml.plugins.firstOrNull { it.id.equals(id, ignoreCase = true) } ?: return
@@ -168,11 +151,10 @@ object SourceResolver {
     /**
      * Resolves a bare `remove <identifier>` / `update <identifier>`
      * against the currently declared `[[plugins]]` entries by id alone.
-     * Kotlin equivalent of `resolve_declared_identifier()`. `context` is
-     * only used to name the subcommand in the "not found" message. Throws
-     * [ResolutionException] if not found (or, in a state that should be
-     * unreachable given [checkIdAvailable]'s invariant, if declared more
-     * than once -- e.g. a hand-edited jarlet.toml).
+     * `context` is only used to name the subcommand in the "not found"
+     * message. Throws [ResolutionException] if not found (or, in a state
+     * that should be unreachable given [checkIdAvailable]'s invariant, if
+     * declared more than once -- e.g. a hand-edited jarlet.toml).
      *
      * Also accepts a github shorthand: when [identifier] contains no `/`
      * and the exact-id match above finds nothing, it is additionally

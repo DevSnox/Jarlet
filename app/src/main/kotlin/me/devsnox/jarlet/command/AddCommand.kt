@@ -16,27 +16,24 @@ import me.devsnox.jarlet.plugin.PluginDependencyChecker
 
 /**
  * `jarlet plugin add <name> <identifier> [--pin <version> | --channel <name>] [--source <hangar|spiget|github>] [--trust]`
- * -- Kotlin port of `src/plugin/commands.sh`'s `cmd_add()`.
  *
- * `source` is no longer a positional argument -- per the alpha.5 redesign
- * `commands.sh` documents, it's inferred from `identifier` by
+ * `source` is inferred from `identifier` by
  * [me.devsnox.jarlet.plugin.SourceResolver.resolveAddIdentifier] (`owner/repo` -> github,
  * numeric -> probe hangar/spiget, name -> hangar exact slug then spiget
  * exact-name search), unless `--source` is given as an explicit escape
  * hatch that skips inference entirely (still validated via
  * [me.devsnox.jarlet.plugin.SourceResolver.validateSourceIdShape]).
  *
- * Declares a new `[[plugins]]` entry in `jarlet.toml` (a full rewrite, same
- * lossy-rewrite tradeoff `write_toml_file()`/`json_to_toml()` document in
- * the bash version) and only *then* routes it to actually fetch it --
- * matching `cmd_add()`'s documented "declare, then act" order exactly: a
- * failed fetch still leaves the plugin declared in `jarlet.toml`. The
+ * Declares a new `[[plugins]]` entry in `jarlet.toml` (a full rewrite -- see
+ * [JarletToml]'s write docs) and only *then* routes it to actually fetch
+ * it: a failed fetch still leaves the plugin declared in `jarlet.toml`. The
  * resolve/declare/write/route sequence itself is shared with
  * [PluginDependencyChecker] via [PluginDeclarer.declareAndRoute].
  *
- * Fully wired end-to-end: [me.devsnox.jarlet.plugin.SourceResolver], [JarletToml] (tomlj-backed
- * read/mutate/write), and [PluginDeclarer.declareAndRoute] against
- * [me.devsnox.jarlet.plugin.AdapterRegistry]'s three registered adapters (hangar, github, spiget).
+ * Wired end-to-end against [me.devsnox.jarlet.plugin.SourceResolver],
+ * [JarletToml], and [PluginDeclarer.declareAndRoute] using
+ * [me.devsnox.jarlet.plugin.AdapterRegistry]'s three registered adapters
+ * (hangar, github, spiget).
  */
 class AddCommand : JarletCommand(name = "add") {
 
@@ -72,8 +69,7 @@ class AddCommand : JarletCommand(name = "add") {
         Files.createDirectories(pluginsDir)
 
         // With neither --pin nor --channel given, default to tracking the
-        // "Release" channel -- matching hangar.sh's own internal default
-        // (`.channel // "Release"`) for entries that omit one.
+        // "Release" channel.
         val policy = if (pin != null) {
             JarletToml.Policy(pin = pin)
         } else {

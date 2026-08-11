@@ -6,26 +6,16 @@ import org.tomlj.Toml
 import org.tomlj.TomlTable
 
 /**
- * Kotlin data model for a `jarlet.toml` server template -- see
- * `src/jarlet.toml` for a worked example and
- * `prototyping/documentation/concepts/server-templating/server-templating.md`
- * for the full field-meaning writeup this mirrors.
+ * Data model for a `jarlet.toml` server template.
  *
- * Read/write goes through [tomlj](https://github.com/tomlj/tomlj) rather
- * than shelling out to `dasel` the way `src/lib/lib.sh`'s
- * `toml_to_json()`/`json_to_toml()` do today -- see [read]/[write] below
- * for what that trade-off means in practice.
+ * Read/write goes through [tomlj](https://github.com/tomlj/tomlj) -- see
+ * [read]/[write] below for what that means in practice.
  *
  * tomlj is a plain Java TOML parser, not a kotlinx.serialization format
  * module: it hands back an [TomlTable]/`TomlParseResult` object tree that
  * has to be navigated by hand (`getString`, `getTable`, `getArray`, ...),
  * so [read] and [write] map that tree to/from this data model explicitly
  * instead of relying on `@Serializable`/`decodeFromString`.
- *
- * Phase 1 only needs this to round-trip the fields already in
- * `src/jarlet.toml`; fields other adapters (`resolve.sh`/`router.sh`) will
- * eventually need (e.g. richer plugin policy shapes) can be added once
- * those phases port them.
  */
 data class JarletToml(
     val template: Template,
@@ -47,14 +37,12 @@ data class JarletToml(
     )
 
     /**
-     * `source`/`id` are the source-agnostic plugin identity pair
-     * (`plugin-management.md`'s model); `policy` follows that same doc's
-     * three observed shapes -- `{ pin = "<version>" }`,
+     * `source`/`id` are the source-agnostic plugin identity pair; `policy`
+     * follows one of three shapes -- `{ pin = "<version>" }`,
      * `{ track = "latest" }`, or `{ track = "channel", channel = "..." }`
-     * -- collapsed into one nullable-field data class, same as the
-     * previous kotlinx.serialization-based model, since tomlj's inline
-     * tables don't carry a fixed Kotlin type either and this shape is
-     * simplest for callers (see [me.devsnox.jarlet.command.ListCommand]).
+     * -- collapsed into one nullable-field data class, since tomlj's
+     * inline tables don't carry a fixed Kotlin type either and this shape
+     * is simplest for callers (see [me.devsnox.jarlet.command.ListCommand]).
      */
     data class Plugin(
         val source: String,
@@ -66,12 +54,11 @@ data class JarletToml(
      * Version-selection policy shape shared by [Plugin] and [Server] --
      * `{ pin = "<version>" }`, `{ track = "latest" }`, or
      * `{ track = "channel", channel = "..." }` -- collapsed into one
-     * nullable-field data class, same as the previous
-     * kotlinx.serialization-based model, since tomlj's inline tables don't
-     * carry a fixed Kotlin type either and this shape is simplest for
-     * callers (see [me.devsnox.jarlet.command.ListCommand]). Not nested
-     * under [Plugin] since [Server] needs the same shape (e.g. pinning a
-     * server-software build) ahead of a planned 2nd server adapter.
+     * nullable-field data class, since tomlj's inline tables don't carry a
+     * fixed Kotlin type either and this shape is simplest for callers (see
+     * [me.devsnox.jarlet.command.ListCommand]). Not nested under [Plugin]
+     * since [Server] needs the same shape too (e.g. pinning a
+     * server-software build).
      */
     data class Policy(
         val pin: String? = null,
@@ -147,20 +134,17 @@ data class JarletToml(
  * Serializes [toml] and writes it to [path], overwriting any existing
  * content.
  *
- * IMPORTANT (mirrors the warning on `json_to_toml()` in `src/lib/lib.sh`):
- * this is a full, lossy rewrite. tomlj has no public API for building or
- * mutating a TOML document in memory -- `Toml.parse` only returns a
- * read-only `TomlParseResult`, and the object types its serializer
- * (`TomlTable.toToml()`) walks (`MutableTomlTable`/`MutableTomlArray`) are
- * package-private, so there's no supported way to construct one from
- * outside `org.tomlj` and hand it to that serializer. Comment/formatting
- * round-tripping was never on the table either way: like ktoml before it
- * and dasel today, tomlj's writer only knows about the data it was given,
- * not source text, so writing back a file read via [JarletToml.read] will
- * drop things like the header comment block in `src/jarlet.toml`.
- * Preserving those is an open question flagged in the migration plan, not
- * solved here. This function therefore renders TOML text directly rather
- * than going through tomlj at all.
+ * IMPORTANT: this is a full, lossy rewrite. tomlj has no public API for
+ * building or mutating a TOML document in memory -- `Toml.parse` only
+ * returns a read-only `TomlParseResult`, and the object types its
+ * serializer (`TomlTable.toToml()`) walks
+ * (`MutableTomlTable`/`MutableTomlArray`) are package-private, so there's
+ * no supported way to construct one from outside `org.tomlj` and hand it
+ * to that serializer. Comment/formatting round-tripping is not supported
+ * either way: tomlj's writer only knows about the data it was given, not
+ * source text, so writing back a file read via [JarletToml.read] drops
+ * things like header comment blocks. This function therefore renders TOML
+ * text directly rather than going through tomlj at all.
  */
 fun JarletToml.write(path: Path) {
     val text = buildString {
@@ -208,10 +192,8 @@ private fun tomlString(value: String): String {
 }
 
 /**
- * Renders a [JarletToml.Policy] as a TOML inline table, matching the three
- * shapes `src/jarlet.toml` and `plugin-management.md` document:
- * `{ pin = "..." }`, `{ track = "latest" }`, or
- * `{ track = "channel", channel = "..." }`.
+ * Renders a [JarletToml.Policy] as a TOML inline table: `{ pin = "..." }`,
+ * `{ track = "latest" }`, or `{ track = "channel", channel = "..." }`.
  */
 private fun JarletToml.Policy.toInlineToml(): String {
     val fields = buildList {

@@ -8,9 +8,7 @@ import me.devsnox.jarlet.io.PluginYamlReader
 
 /**
  * Post-install `depend`/`softdepend` awareness for `plugin add`/`plugin
- * update`, per the task's "retrieve and recognise dependencies from
- * plugin.yml ... warn him, and allow with --resolve-dependencies to add
- * plugin dependencies" -- reads the freshly-installed jar's `plugin.yml`
+ * update` -- reads the freshly-installed jar's `plugin.yml`
  * (via [me.devsnox.jarlet.io.PluginYamlReader]) and compares its `depend`/`softdepend` names
  * against the server's currently-declared `[[plugins]]` ids.
  *
@@ -68,10 +66,6 @@ object PluginDependencyChecker {
 
         for (dep in missingHard) {
             val suffix = if (resolveDependencies) "" else " (pass --resolve-dependencies to install it automatically)"
-            // Log.info, not Log.warn: this was plain (stdout, non-err)
-            // echo() before this migration, so the "Warning: " text is
-            // kept literal here rather than routed through Log.warn()'s
-            // own stderr-bound prefix, which would change the stream.
             Log.info("""Warning: required dependency "$dep" of "$id" is not declared for this server; "$id" will fail to load without it$suffix""")
         }
         for (dep in missingSoft) {
