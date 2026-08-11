@@ -28,7 +28,11 @@ class Jarlet : CliktCommand(name = "jarlet") {
         .flag(default = false)
 
     init {
-        versionOption(JarletVersion.VERSION)
+        versionOption(
+            JarletVersion.VERSION,
+            names = setOf("--version", "-v"),
+            message = { SelfUpdateChecker.versionMessage(it) },
+        )
         subcommands(InstallCommand(), SetupCommand(), StartCommand(), StopCommand(), TrackCommand(), PluginCommand())
 
         // Mordant's default Terminal() auto-detects the terminal width, which

@@ -9,17 +9,22 @@ import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.lib.SemVer
 import me.devsnox.jarlet.lib.SharedHttp
 import java.nio.file.Files
+import java.nio.file.Path
 
 /**
- * Background, notify-only check for a newer stable Jarlet release on
- * GitHub. [maybeCheckAsync] is the entry point: it rate-limits itself to
- * once per [SysConfig]'s `SELF_UPDATE_CHECK_INTERVAL_MINUTES` via a
- * timestamp file under [JarletHome], then runs the actual GitHub lookup on
- * a daemon thread so it never delays a command. The check only ever prints
- * a single-line notice through [Log.info] when a strictly newer release
- * exists with its Linux x86_64 asset actually published -- any network,
- * parse, or missing-asset condition is silently treated as "nothing to
- * report". Never installs or invokes anything itself.
+ * Notify-only check for a newer stable Jarlet release on GitHub, shared by
+ * two callers: [maybeCheckAsync] (a background, non-blocking check fired on
+ * every CLI invocation) and [versionMessage] (a synchronous check used by
+ * `--version`/`-v`, since a user explicitly asking for version info can
+ * reasonably wait on it). Both share one state file under [JarletHome]
+ * caching the last check's timestamp and result, rate-limited to once per
+ * [SysConfig]'s `SELF_UPDATE_CHECK_INTERVAL_MINUTES` -- whichever caller
+ * runs first within that window does the real GitHub lookup; the other
+ * reads the cached result instead of re-checking. A notice is only ever
+ * shown when a strictly newer release exists with its Linux x86_64 asset
+ * actually published -- any network, parse, or missing-asset condition is
+ * silently treated as "nothing to report". Never installs or invokes
+ * anything itself.
  */
 object SelfUpdateChecker {
 
@@ -61,41 +66,87 @@ object SelfUpdateChecker {
         }
     }
 
+    private fun stateFile(): Path = JarletHome.resolve().resolve("update-check-state")
+
+    /** `timestamp` on the first line, the cached notice (possibly blank -- meaning "checked, nothing to report") on the second. */
+    private fun readState(path: Path): Pair<Long, String?>? {
+        return try {
+            if (!Files.isRegularFile(path)) return null
+            val lines = Files.readAllLines(path)
+            val timestamp = lines.getOrNull(0)?.toLongOrNull() ?: return null
+            val notice = lines.getOrNull(1)?.takeIf { it.isNotBlank() }
+            timestamp to notice
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun writeState(path: Path, timestamp: Long, notice: String?) {
+        try {
+            Files.createDirectories(path.parent)
+            Files.writeString(path, "$timestamp\n${notice.orEmpty()}\n")
+        } catch (e: Exception) {
+            // Best-effort cache -- a failed write just means the next
+            // invocation re-checks instead of using a cached result.
+        }
+    }
+
+    private fun isFresh(lastChecked: Long, now: Long, intervalMinutes: Long): Boolean =
+        now - lastChecked < intervalMinutes * 60_000
+
     /**
      * Entry point called once per CLI invocation. No-ops immediately (no
      * thread spawned, no I/O) if `JARLET_NO_UPDATE_CHECK` is set, or if the
      * state file shows a check already happened within the configured
-     * interval. Otherwise updates the state file's timestamp immediately
-     * (so overlapping/rapid invocations don't all fire a check) and starts
-     * a daemon thread doing the actual network call; returns the thread so
-     * the caller can join it with a bounded timeout.
+     * interval. Otherwise starts a daemon thread doing the actual network
+     * call and caching its result; returns the thread so the caller can
+     * join it with a bounded timeout.
      */
     fun maybeCheckAsync(): Thread? {
         if (!System.getenv("JARLET_NO_UPDATE_CHECK").isNullOrEmpty()) return null
 
-        val stateFile = JarletHome.resolve().resolve("update-check-state")
         val intervalMinutes = SysConfig.default().value("SELF_UPDATE_CHECK_INTERVAL_MINUTES").toLongOrNull() ?: return null
+        val path = stateFile()
         val now = System.currentTimeMillis()
 
-        val lastChecked = try {
-            if (Files.isRegularFile(stateFile)) Files.readString(stateFile).trim().toLongOrNull() else null
-        } catch (e: Exception) {
-            null
-        }
-        if (lastChecked != null && now - lastChecked < intervalMinutes * 60_000) return null
-
-        try {
-            Files.createDirectories(stateFile.parent)
-            Files.writeString(stateFile, now.toString())
-        } catch (e: Exception) {
-            return null
-        }
+        val state = readState(path)
+        if (state != null && isFresh(state.first, now, intervalMinutes)) return null
 
         val thread = Thread {
-            fetchAndEvaluate()?.let { Log.info(it) }
+            val notice = fetchAndEvaluate()
+            writeState(path, System.currentTimeMillis(), notice)
+            notice?.let { Log.info(it) }
         }
         thread.isDaemon = true
         thread.start()
         return thread
+    }
+
+    /**
+     * Synchronous counterpart used by `--version`/`-v`: returns [version]
+     * alone, or [version] plus the update notice on its own line when one
+     * applies. Shares the same cache/interval/disable-flag as
+     * [maybeCheckAsync] -- a fresh cached result (from a prior invocation,
+     * background or explicit) is reused as-is; a stale or missing one
+     * triggers one bounded, synchronous GitHub check (a user asking for
+     * version info can reasonably wait on it, unlike a passing background
+     * check).
+     */
+    fun versionMessage(version: String): String {
+        if (!System.getenv("JARLET_NO_UPDATE_CHECK").isNullOrEmpty()) return version
+
+        val intervalMinutes = SysConfig.default().value("SELF_UPDATE_CHECK_INTERVAL_MINUTES").toLongOrNull()
+            ?: return version
+        val path = stateFile()
+        val now = System.currentTimeMillis()
+
+        val state = readState(path)
+        val notice = if (state != null && isFresh(state.first, now, intervalMinutes)) {
+            state.second
+        } else {
+            fetchAndEvaluate().also { writeState(path, now, it) }
+        }
+
+        return if (notice != null) "$version\n$notice" else version
     }
 }
