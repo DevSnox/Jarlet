@@ -11,15 +11,11 @@ import me.devsnox.jarlet.Log
 /**
  * One entry of `plugins-state.json` -- Jarlet's own locally-written record
  * of what's actually installed for a given declared `(source, id)` pair,
- * as opposed to `jarlet.toml`'s [JarletToml.Plugin]
- * which only records *intent*. Kotlin equivalent of the object shape
- * `write_installed_version()` in `src/plugin/store.sh` persists (see e.g.
- * `src/adapter/plugin/hangar.sh`'s call to it for a concrete example of
- * every field being populated).
+ * as opposed to `jarlet.toml`'s [JarletToml.Plugin] which only records
+ * *intent*.
  *
  * [source]/[id] are included on every entry (not just used as a lookup
- * key) because the store is a flat JSON array, not a map -- same shape
- * `read_all_installed()` returns to `list.sh` today.
+ * key) because the store is a flat JSON array, not a map.
  */
 @Serializable
 data class InstalledVersion(
@@ -47,14 +43,11 @@ data class InstalledVersion(
 )
 
 /**
- * Kotlin port of `src/plugin/store.sh`'s `plugins-state.json`
- * read/write/remove helpers. Pure local bookkeeping, same as the bash
- * version -- has no knowledge of any plugin source; that's
+ * Read/write/remove helpers for `plugins-state.json`. Pure local
+ * bookkeeping -- has no knowledge of any plugin source; that's
  * [me.devsnox.jarlet.plugin.PluginRouter]/[me.devsnox.jarlet.plugin.AdapterRegistry]'s job.
- *
- * Unlike `store.sh`, this does not also own `jarlet.toml` rewriting
- * (`write_toml_file()`/`json_to_toml()` there) -- that belongs with
- * add/remove (phase 5), which is out of scope here.
+ * `jarlet.toml` rewriting is handled separately by the add/remove/update
+ * commands, out of scope here.
  */
 object PluginStateStore {
     private const val STATE_FILENAME = "plugins-state.json"
@@ -64,13 +57,12 @@ object PluginStateStore {
         ignoreUnknownKeys = true
     }
 
-    /** Kotlin equivalent of `plugin_state_file()`. */
+    /** Path to `plugins-state.json` inside [serverDir]. */
     fun stateFile(serverDir: Path): Path = serverDir.resolve(STATE_FILENAME)
 
     /**
      * The whole `plugins-state.json` array, or an empty list if no state
-     * file exists yet for this server. Kotlin equivalent of
-     * `read_all_installed()`.
+     * file exists yet for this server.
      */
     fun readAll(serverDir: Path): List<InstalledVersion> {
         val file = stateFile(serverDir)
@@ -80,17 +72,12 @@ object PluginStateStore {
 
     /**
      * The locally-recorded installed entry for `source`+`id`, or `null` if
-     * none is recorded. Combines `read_installed_version()` and
-     * `read_installed_file()` from the bash version, since both are just
-     * different fields of the same record here.
+     * none is recorded.
      */
     fun read(serverDir: Path, source: String, id: String): InstalledVersion? =
         readAll(serverDir).firstOrNull { it.source == source && it.id == id }
 
-    /**
-     * Records/replaces the installed-version entry for `entry.source`+
-     * `entry.id`. Kotlin equivalent of `write_installed_version()`.
-     */
+    /** Records/replaces the installed-version entry for `entry.source`+`entry.id`. */
     fun write(serverDir: Path, entry: InstalledVersion) {
         val updated = readAll(serverDir).filterNot { it.source == entry.source && it.id == entry.id } + entry
         writeAll(serverDir, updated)
@@ -98,8 +85,7 @@ object PluginStateStore {
 
     /**
      * Drops the `source`+`id` entry entirely, if one exists. A no-op if no
-     * state file exists yet, or no matching entry is found. Kotlin
-     * equivalent of `remove_installed_version()`.
+     * state file exists yet, or no matching entry is found.
      */
     fun remove(serverDir: Path, source: String, id: String) {
         val existing = readAll(serverDir)
@@ -148,10 +134,8 @@ object PluginStateStore {
     }
 
     /**
-     * Writes [entries] to `plugins-state.json` via a temp-file-then-move,
-     * mirroring `write_installed_version()`/`remove_installed_version()`'s
-     * `mktemp` + `mv` (and its `trap ... RETURN` cleanup) so a reader never
-     * observes a partially-written file.
+     * Writes [entries] to `plugins-state.json` via a temp-file-then-move
+     * so a reader never observes a partially-written file.
      */
     private fun writeAll(serverDir: Path, entries: List<InstalledVersion>) {
         Files.createDirectories(serverDir)

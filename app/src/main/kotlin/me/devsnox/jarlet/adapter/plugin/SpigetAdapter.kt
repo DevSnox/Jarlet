@@ -20,18 +20,15 @@ import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import kotlin.math.abs
 
-/** Thrown for the same failure cases `fail()` covers throughout `src/adapter/plugin/spiget.sh`. */
+/** Thrown for Spiget request/parse/verification failures. */
 class SpigetAdapterException(message: String) : Exception(message)
 
 /**
- * Spiget (SpigotMC) plugin source adapter -- Kotlin port of
- * `src/adapter/plugin/spiget.sh`. Spiget (`https://api.spiget.org/v2`)
- * needs no API key/auth (confirmed live), unlike [HangarAdapter] -- so
- * unlike that adapter there is no authenticate/JWT machinery here at all.
+ * Spiget (SpigotMC) plugin source adapter. Spiget
+ * (`https://api.spiget.org/v2`) needs no API key/auth, unlike
+ * [HangarAdapter] -- so there is no authenticate/JWT machinery here at all.
  *
- * Two real gaps versus [HangarAdapter]/[me.devsnox.jarlet.adapter.server.PaperAdapter],
- * both confirmed by live probes against the real API (not just the
- * research doc) before the bash version was written -- preserved here:
+ * Two API gaps this adapter works around:
  *
  *   1. No checksum of any kind is exposed anywhere in Spiget's API.
  *      Verification is size-only, and even that is best-effort: only the
@@ -43,19 +40,18 @@ class SpigetAdapterException(message: String) : Exception(message)
  *   2. A version's `uuid` (the authoritative, persisted identity) is NOT
  *      directly queryable in `/versions/{version}` -- only the numeric
  *      `id` (or the literal `"latest"`) resolves there; a uuid in that
- *      position 404s (confirmed live, and per the swagger spec itself,
- *      which types `version` as "Version ID or 'latest'"). Resolving a
- *      pinned uuid back to a numeric id therefore requires a bounded scan
- *      of the versions list -- see [resolvePinnedVersion].
+ *      position 404s (per the swagger spec, which types `version` as
+ *      "Version ID or 'latest'"). Resolving a pinned uuid back to a
+ *      numeric id therefore requires a bounded scan of the versions list
+ *      -- see [resolvePinnedVersion].
  *
- * Also confirmed live: the plain (non-proxy) `/download` endpoint
- * redirects to a spigotmc.org HTML resource page, not a raw file
- * (SpigotMC requires a browser click-through) -- so this adapter always
- * uses `.../download/proxy`, which does return the raw file directly. The
- * proxy endpoint's documented "pretty strict rate-limit" is why this
- * adapter, like [HangarAdapter], only ever downloads once a
- * version-uuid mismatch has already been established by a cheap
- * metadata-only check.
+ * The plain (non-proxy) `/download` endpoint redirects to a spigotmc.org
+ * HTML resource page, not a raw file (SpigotMC requires a browser
+ * click-through) -- so this adapter always uses `.../download/proxy`,
+ * which returns the raw file directly. The proxy endpoint's documented
+ * strict rate-limit is why this adapter, like [HangarAdapter], only ever
+ * downloads once a version-uuid mismatch has already been established by
+ * a cheap metadata-only check.
  */
 object SpigetAdapter : PluginSourceAdapter {
     override val sourceName: String = "spiget"
@@ -71,7 +67,7 @@ object SpigetAdapter : PluginSourceAdapter {
     private val versionListPageSize: Int by lazy { SysConfig.default().value("SPIGET_VERSION_LIST_PAGE_SIZE").toInt() }
     private val versionListMaxPages: Int by lazy { SysConfig.default().value("SPIGET_VERSION_LIST_MAX_PAGES").toInt() }
 
-    /** Plain GET against `$SPIGET_API$path`. No auth header of any kind -- confirmed live that Spiget's API is fully anonymous. Mirrors `spiget_get()`. */
+    /** Plain GET against `$SPIGET_API$path`. No auth header of any kind -- Spiget's API is fully anonymous. */
     private fun get(path: String): String {
         val response = try {
             SharedHttp.get("$spigetApi$path")
@@ -89,7 +85,7 @@ object SpigetAdapter : PluginSourceAdapter {
      * by scanning the versions list newest-first, bounded to 5 pages of
      * 100 (500 most recent versions) -- if a pin is older than that, this
      * throws with a clear message rather than scanning indefinitely
-     * against a rate-limited API. Mirrors `spiget_resolve_pinned_version()`.
+     * against a rate-limited API.
      */
     private fun resolvePinnedVersion(id: String, pin: String): SpigetVersionResponse {
         for (page in 1..5) {
@@ -123,11 +119,9 @@ object SpigetAdapter : PluginSourceAdapter {
      * `SPIGET_VERSION_LIST_PAGE_SIZE` each (per `jarlet-sys.conf`), and
      * picks the highest version within [track]'s bound of [baseline] via
      * [pickHighestWithinBound] (using each version's human-readable `name`
-     * field). Returns null if none qualify. Mirrors
-     * [resolvePinnedVersion]'s bounded-page-scan structure exactly, but
-     * reads its page size/page count from config instead of that
-     * function's own hardcoded `100`/`5` -- [resolvePinnedVersion] itself
-     * is untouched.
+     * field). Returns null if none qualify. Follows the same bounded-page-
+     * scan structure as [resolvePinnedVersion], but reads its page
+     * size/page count from config instead of a fixed `100`/`5`.
      */
     private fun fetchVersionWithinBound(id: String, baseline: SemVer, track: String): SpigetVersionResponse? {
         val candidates = mutableListOf<SpigetVersionResponse>()
@@ -160,7 +154,7 @@ object SpigetAdapter : PluginSourceAdapter {
      * class doc's "no checksum" gap). Assumes 1024-based units
      * (KB/MB/GB), the common convention; there is no authoritative spec
      * for which base Spiget itself uses. Returns `null` for an
-     * unrecognized unit. Mirrors `spiget_size_to_bytes()`.
+     * unrecognized unit.
      */
     private fun sizeToBytes(size: Double, unit: String?): Long? {
         val multiplier = when (unit?.uppercase()) {
@@ -177,8 +171,7 @@ object SpigetAdapter : PluginSourceAdapter {
      * Sanitizes an arbitrary Spiget resource name into a safe jar filename
      * component (mirrors [HangarAdapter]'s `"$slug.jar"` fallback, but
      * spiget's id is purely numeric and not human-readable, so the
-     * resource name is preferred when available). Mirrors
-     * `spiget_sanitize_filename()`.
+     * resource name is preferred when available).
      */
     private fun sanitizeFilename(name: String): String {
         val replaced = name.map { c -> if (c.isLetterOrDigit() || c in "._-") c else '-' }.joinToString("").lowercase()
@@ -249,9 +242,8 @@ object SpigetAdapter : PluginSourceAdapter {
         val pin = policy.pin
 
         // Same gating as GithubAdapter: only pin.isNullOrEmpty() &&
-        // track in {minor, patch} deviates from today's behavior. Spiget
-        // has no channel concept, so there's no other existing "track"
-        // branch to preserve here.
+        // track in {minor, patch} takes the version-bound path. Spiget
+        // has no channel concept.
         val useTrackBound = pin.isNullOrEmpty() && (policy.track == "minor" || policy.track == "patch")
         val baseline = if (useTrackBound) {
             // The installed baseline's *human* version name -- versionName
@@ -307,11 +299,9 @@ object SpigetAdapter : PluginSourceAdapter {
 
         val displayVersion = targetName?.takeIf { it.isNotEmpty() } ?: targetUuid
 
-        // version_name is the field a future PluginStateStore.read()
-        // comparison reads back -- uuid (not the human-readable name, and
-        // not the "deprecated" numeric id) is what's authoritative per the
-        // research doc, so it's what's stored here, same role target_version
-        // plays in HangarAdapter.
+        // versionName is what PluginStateStore.read() compares back --
+        // uuid (not the human-readable name or the deprecated numeric id)
+        // is the authoritative identity, so it's what's stored here.
         val installed = PluginStateStore.read(serverDir, sourceName, id)?.versionName
         if (installed == targetUuid) {
             Log.info("\"$label\" is already up to date ($displayVersion)")
@@ -327,10 +317,10 @@ object SpigetAdapter : PluginSourceAdapter {
             Log.info("Downloading $label $displayVersion")
 
             // Always the proxy endpoint -- the plain /download redirects to
-            // a spigotmc.org HTML page, not a raw file (confirmed live; see
-            // class doc). Rate-limited per Spiget's own docs, which is why
-            // this only runs after the cheap metadata check above already
-            // found a mismatch.
+            // a spigotmc.org HTML page, not a raw file (see class doc).
+            // Rate-limited per Spiget's own docs, which is why this only
+            // runs after the cheap metadata check above already found a
+            // mismatch.
             val download = try {
                 SharedHttp.download("$spigetApi/resources/$id/versions/$targetVersionId/download/proxy", temporary)
             } catch (e: IOException) {
@@ -356,9 +346,6 @@ object SpigetAdapter : PluginSourceAdapter {
                 }
             }
 
-            // Log.info, not Log.warn: this was plain (stdout) println() before
-            // this migration; the literal "Warning: " text is kept as-is
-            // rather than doubled by Log.warn()'s own stderr-bound prefix.
             Log.info("Warning: Spiget exposes no checksum for any plugin -- \"$label\" $displayVersion was only verified by file size, not cryptographically")
 
             // Prefer the real filename the proxy reports over the sanitized

@@ -7,11 +7,9 @@ import java.nio.file.Paths
 import java.nio.file.StandardOpenOption
 
 /**
- * Global, per-domain trust list for externally-hosted plugin downloads --
- * Kotlin port of the trust-list half of `src/plugin/trust.sh`
- * (`trusted_sources_file()`, `url_domain()`, `is_domain_trusted()`,
- * `trust_domain()`). See [me.devsnox.jarlet.plugin.UntrustedExternalDownloader] for the other half
- * (`handle_untrusted_external_url()`, the actual fetch-and-verify gate).
+ * Global, per-domain trust list for externally-hosted plugin downloads.
+ * See [me.devsnox.jarlet.plugin.UntrustedExternalDownloader] for the other
+ * half of this mechanism: the actual fetch-and-verify gate.
  *
  * What this solves: [me.devsnox.jarlet.plugin.ExternalUrlRedirector] only handles an external URL
  * that belongs to a source Jarlet already has a working adapter for.
@@ -22,26 +20,18 @@ import java.nio.file.StandardOpenOption
  * the user explicitly said they trust this domain enough to fetch a plain,
  * unverified-by-any-adapter file from it".
  *
- * Trust is domain-level (not exact-URL, not prefix) and persisted globally
- * (not per-server), same reasoning as the bash version: the concrete
- * motivating case (Geyser's `.../versions/latest/builds/latest/downloads/spigot`)
- * is itself a versionless "latest" API path, not a specific file -- pinning
- * trust to that exact string would be trust in name only, since the actual
- * bytes behind it change over time regardless.
+ * Trust is domain-level (not exact-URL, not prefix) and persisted
+ * globally (not per-server): the concrete motivating case (Geyser's
+ * `.../versions/latest/builds/latest/downloads/spigot`) is itself a
+ * versionless "latest" API path, not a specific file -- pinning trust to
+ * that exact string would be trust in name only, since the actual bytes
+ * behind it change over time regardless.
  *
- * Storage location judgment call: bash persists this at
- * `$SCRIPT_DIR/../$(sys_config_value TRUSTED_SOURCES_FILENAME)`, i.e.
- * next to the installed `jarlet` script and its `jarlet-sys.conf`. A
- * compiled JVM binary has no equivalent "next to the install" directory
- * (`jarlet-sys.conf` is bundled as a classpath resource here, not read
- * from a sibling file -- see [SysConfig]), so this instead uses a
- * `JARLET_HOME` env var override, falling back to `~/jarlet` -- the same
- * root [me.devsnox.jarlet.server.ServerPaths.serversRoot]'s default
- * (`~/jarlet/servers`) sits under, keeping every Jarlet-managed file
- * under one predictable home directory absent an explicit override. Not
- * verified against any other phase's choice (none existed yet at the time
- * this was written) -- flagged for reconciliation if a `JARLET_HOME`
- * concept is introduced elsewhere later.
+ * Persisted under a `JARLET_HOME` env var override, falling back to
+ * `~/jarlet` -- the same root
+ * [me.devsnox.jarlet.server.ServerPaths.serversRoot]'s default
+ * (`~/jarlet/servers`) sits under, keeping every Jarlet-managed file under
+ * one predictable home directory absent an explicit override.
  */
 object TrustedSourceStore {
     /** The global trust-list file (not guaranteed to exist yet -- [isTrusted] handles that; [trust] is the only writer and creates it on first use). */
@@ -52,7 +42,7 @@ object TrustedSourceStore {
         return Paths.get(home).resolve(filename)
     }
 
-    /** Extracts the host (domain, port stripped) from [url], e.g. `"https://download.geysermc.org/v2/..."` -> `"download.geysermc.org"`. Mirrors `url_domain()`. */
+    /** Extracts the host (domain, port stripped) from [url], e.g. `"https://download.geysermc.org/v2/..."` -> `"download.geysermc.org"`. */
     fun domainOf(url: String): String =
         try {
             URI(url).host ?: url
@@ -60,7 +50,7 @@ object TrustedSourceStore {
             url
         }
 
-    /** True if [domain] is present as its own line in the trust file (blank lines and `#`-comments ignored, exact match only -- no wildcarding). Mirrors `is_domain_trusted()`. */
+    /** True if [domain] is present as its own line in the trust file (blank lines and `#`-comments ignored, exact match only -- no wildcarding). */
     fun isTrusted(domain: String): Boolean {
         val path = file()
         if (!Files.isRegularFile(path)) return false
@@ -71,7 +61,7 @@ object TrustedSourceStore {
         }
     }
 
-    /** Appends [domain] to the trust file if not already present, creating the file (with a short header comment) on first use. Mirrors `trust_domain()`. */
+    /** Appends [domain] to the trust file if not already present, creating the file (with a short header comment) on first use. */
     fun trust(domain: String) {
         if (isTrusted(domain)) return
 

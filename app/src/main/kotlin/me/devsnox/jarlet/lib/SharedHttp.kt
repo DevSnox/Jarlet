@@ -27,27 +27,16 @@ import kotlin.collections.iterator
  * [me.devsnox.jarlet.adapter.plugin.SpigetAdapter]), the server-software
  * adapter ([me.devsnox.jarlet.adapter.server.PaperAdapter]), plus
  * [me.devsnox.jarlet.plugin.SourceResolver] and
- * [me.devsnox.jarlet.plugin.UntrustedExternalDownloader] -- every one of
- * those bash counterparts (`hangar.sh`/`github-releases.sh`/`spiget.sh`/
- * `paper.sh`/`resolve.sh`/`trust.sh`) repeats the same handful of `curl`
- * invocation shapes (a plain GET capturing status+body via
- * `--write-out '\n%{http_code}'`, a status-only existence probe via
- * `--output /dev/null --write-out '%{http_code}'`, and a retried file
- * download via `--retry 3` with `--dump-header` for `Content-Disposition`),
- * so factoring them once here avoids repeating that boilerplate across
- * subsystems. Deliberately subsystem-neutral (package `me.devsnox.jarlet.http`,
- * not `me.devsnox.jarlet.plugin`) precisely because it now serves both the
- * plugin and server-software adapters, not just plugin plumbing -- it lived
- * under `me.devsnox.jarlet.plugin` as `PluginHttp` while only plugin
- * adapters used it, and was relocated/renamed once `PaperAdapter` also
- * started depending on it, to keep the package honest about its audience.
- * This is plumbing shared across subsystems, not a competing adapter
- * contract -- [me.devsnox.jarlet.plugin.PluginSourceAdapter] and
+ * [me.devsnox.jarlet.plugin.UntrustedExternalDownloader]. Deliberately
+ * subsystem-neutral (package `me.devsnox.jarlet.lib`, not
+ * `me.devsnox.jarlet.plugin`) since it serves both the plugin and
+ * server-software adapters, not just plugin plumbing. This is plumbing
+ * shared across subsystems, not a competing adapter contract --
+ * [me.devsnox.jarlet.plugin.PluginSourceAdapter] and
  * [me.devsnox.jarlet.adapter.server.ServerSoftwareAdapter] remain the only
  * interfaces adapters implement.
  *
- * Uses `java.net.http.HttpClient` for HTTP, no extra dependency, per the
- * migration plan's recommended defaults.
+ * Uses `java.net.http.HttpClient` for HTTP, no extra dependency.
  */
 object SharedHttp {
     private val httpClient: HttpClient by lazy {
@@ -56,7 +45,7 @@ object SharedHttp {
             .build()
     }
 
-    /** `PROJECT_NAME/<jarlet-version> (REPO_URL)` -- same construction as `$USER_AGENT` throughout the bash prototype. */
+    /** `PROJECT_NAME/<jarlet-version> (REPO_URL)`, used as the `User-Agent` header on every request. */
     val userAgent: String by lazy {
         val sysConfig = SysConfig.default()
         "${sysConfig.value("PROJECT_NAME")}/${JarletVersion.VERSION} (${sysConfig.value("REPO_URL")})"
@@ -77,12 +66,10 @@ object SharedHttp {
 
     /**
      * Plain GET against [url] with [headers] (plus `User-Agent`), returning
-     * the HTTP status and body together -- mirrors every adapter's
-     * `curl ... --write-out '\n%{http_code}'` pattern. Throws [IOException]
-     * on a network-level failure (mirrors curl's own non-zero exit before
-     * any status is even produced); a non-2xx HTTP response is NOT an
-     * exception here -- callers decide what a given status means (a 404 is
-     * "skip" for github, but a hard failure for hangar/spiget).
+     * the HTTP status and body together. Throws [IOException] on a
+     * network-level failure; a non-2xx HTTP response is NOT an exception
+     * here -- callers decide what a given status means (a 404 is "skip"
+     * for github, but a hard failure for hangar/spiget).
      */
     fun get(url: String, headers: Map<String, String> = emptyMap()): Response {
         val request = requestBuilder(url, headers).GET().build()
@@ -94,10 +81,8 @@ object SharedHttp {
 
     /**
      * Existence-probe GET: discards the body, returns only the HTTP status
-     * code, or `0` on any network-level failure -- mirrors resolve.sh's
-     * `resolve_http_status()` (which falls back to the literal string
-     * `"000"` on a curl failure; `0` plays the same "definitely not 2xx"
-     * role here).
+     * code, or `0` on any network-level failure (a value that can never be
+     * a real 2xx status).
      */
     fun statusOnly(url: String, headers: Map<String, String> = emptyMap()): Int =
         try {
@@ -128,13 +113,10 @@ object SharedHttp {
 
     /**
      * Downloads [url] to [target] (overwriting it), retrying up to
-     * [retries] times on any failure -- mirrors `curl --retry 3` (the only
-     * retried step in any adapter; metadata GETs are not retried, same as
-     * the bash prototype). Returns the final file size and any
-     * `Content-Disposition` filename reported (mirrors `--dump-header` +
-     * the `grep`/`sed` filename extraction every download call site
-     * repeats). Throws once all attempts are exhausted, or immediately on a
-     * non-2xx final status.
+     * [retries] times on any failure -- the only retried step in any
+     * adapter; metadata GETs are not retried. Returns the final file size
+     * and any `Content-Disposition` filename reported. Throws once all
+     * attempts are exhausted, or immediately on a non-2xx final status.
      */
     fun download(
         url: String,
@@ -189,7 +171,7 @@ object SharedHttp {
         throw IOException("Download failed" + (lastError?.message?.let { ": $it" } ?: ""), lastError)
     }
 
-    /** SHA-256 of [path]'s contents, as lowercase hex -- mirrors every adapter's `shasum -a 256` call. */
+    /** SHA-256 of [path]'s contents, as lowercase hex. */
     fun sha256Hex(path: Path): String {
         val digest = MessageDigest.getInstance("SHA-256")
         Files.newInputStream(path).use { input ->

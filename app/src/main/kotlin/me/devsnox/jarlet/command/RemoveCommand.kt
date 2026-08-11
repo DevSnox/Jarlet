@@ -13,31 +13,21 @@ import me.devsnox.jarlet.config.PluginStateStore
 import me.devsnox.jarlet.plugin.SourceResolver
 
 /**
- * `jarlet plugin remove <name> <identifier>` -- Kotlin port of
- * `src/plugin/commands.sh`'s `cmd_remove()`.
+ * `jarlet plugin remove <name> <identifier>` -- undeclares a plugin and
+ * deletes its installed jar.
  *
  * `identifier` is resolved against the currently declared `[[plugins]]`
- * entries by id alone, via [me.devsnox.jarlet.plugin.SourceResolver.resolveDeclaredIdentifier] --
- * `source` is no longer a positional argument, since ids are globally
- * unique per server (enforced at declare time by
- * [me.devsnox.jarlet.plugin.SourceResolver.checkIdAvailable]).
+ * entries by id alone, via [me.devsnox.jarlet.plugin.SourceResolver.resolveDeclaredIdentifier]
+ * -- ids are globally unique per server (enforced at declare time by
+ * [me.devsnox.jarlet.plugin.SourceResolver.checkIdAvailable]), so no
+ * separate `source` argument is needed.
  *
- * A full uninstall, matching `cmd_remove()` exactly: drops the
- * `[[plugins]]` entry from `jarlet.toml` (a full rewrite, same tradeoff as
- * `add`), deletes the installed jar from `plugins/` if
- * [PluginStateStore] has one on record, and clears the
- * `plugins-state.json` entry via [PluginStateStore.remove] -- all three,
- * in the same order as the bash version (toml rewrite, then jar deletion,
- * then state removal), so a failure partway through leaves the same kind
- * of partial state the bash version would.
- *
- * ## Integration status
- *
- * Fully wired and should work end-to-end today: no dependency on
- * [me.devsnox.jarlet.plugin.PluginRouter]/[me.devsnox.jarlet.plugin.AdapterRegistry]/phase 4 adapters at all (removal is
- * pure local bookkeeping, same as the bash version), and [JarletToml]'s
- * read/write path is on a working `tomlj`-backed implementation as of this
- * port (see [AddCommand]'s doc comment for that history).
+ * A full uninstall: drops the `[[plugins]]` entry from `jarlet.toml` (a
+ * full rewrite -- see [JarletToml]'s write docs), deletes the installed jar
+ * from `plugins/` if [PluginStateStore] has one on record, and clears the
+ * `plugins-state.json` entry via [PluginStateStore.remove] -- in that
+ * order, so a failure partway through leaves a predictable partial state
+ * rather than an inconsistent one.
  */
 class RemoveCommand : JarletCommand(name = "remove") {
 

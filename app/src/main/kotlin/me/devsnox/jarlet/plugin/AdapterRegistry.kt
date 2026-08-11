@@ -5,19 +5,12 @@ import me.devsnox.jarlet.adapter.plugin.HangarAdapter
 import me.devsnox.jarlet.adapter.plugin.SpigetAdapter
 
 /**
- * Static, reflection-free replacement for `src/plugin/router.sh`'s
- * `load_adapter()` (lazy-sourcing `../adapter/plugin/<source>.sh` and
- * reading back its self-declared `ADAPTER_SOURCE_NAME`/
- * `ADAPTER_ENTRY_FUNCTION`/`ADAPTER_DISPLAY_NAME` via bash's
- * indirect-variable-expansion trick). Per the migration plan's
- * architecture decision #2: one `object` per source implementing
- * [PluginSourceAdapter], registered here in a hand-written map --
- * GraalVM-native-image-friendly (no reflection config needed) while
- * keeping the bash contract's spirit (one adapter per source, sanity-
- * checked name -- here, simply "the map key").
+ * Static, reflection-free registry resolving a plugin `source` string to
+ * its adapter. One `object` per source implements [PluginSourceAdapter],
+ * registered here in a hand-written map -- GraalVM-native-image-friendly,
+ * since no reflection config is needed.
  *
- * All three phase 4 adapters (`hangar`, `github`, `spiget`, same
- * order they were built in bash) are now registered below.
+ * The three registered adapters are `hangar`, `github`, and `spiget`.
  */
 object AdapterRegistry {
     private val adaptersBySource: Map<String, PluginSourceAdapter> = listOf(
@@ -43,11 +36,9 @@ object AdapterRegistry {
     /**
      * Cosmetic-only accessor used by [me.devsnox.jarlet.command.ListCommand]
      * to print a human-readable name instead of the raw internal source
-     * string. Kotlin equivalent of `router.sh`'s `adapter_display_name()`
-     * -- falls back to the raw [source] string itself if no adapter is
-     * registered for it (e.g. a stale/hand-edited `jarlet.toml` entry, or
-     * simply a source not implemented yet in this phase), exactly like the
-     * bash version's fallback for "no adapter file exists".
+     * string -- falls back to the raw [source] string itself if no adapter
+     * is registered for it (e.g. a stale/hand-edited `jarlet.toml` entry,
+     * or a source with no adapter implemented yet).
      */
     fun displayName(source: String): String = adaptersBySource[source]?.displayName ?: source
 }

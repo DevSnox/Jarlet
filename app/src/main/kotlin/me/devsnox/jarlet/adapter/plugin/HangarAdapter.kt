@@ -18,29 +18,20 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 
-/** Thrown for the same failure cases `fail()` covers throughout `src/adapter/plugin/hangar.sh`. */
+/** Thrown for Hangar request/auth/verification failures. */
 class HangarAdapterException(message: String) : Exception(message)
 
 /**
  * Hangar (PaperMC's own first-party plugin repository) plugin source
- * adapter -- Kotlin port of `src/adapter/plugin/hangar.sh`. See that file's
- * header and `prototyping/documentation/sources/hangar-plugin-fetching.md`
- * for the full research this implements; notably:
+ * adapter. Notable API quirks this accounts for:
  *
  *   - Hangar requires an authenticated JWT for essentially every endpoint
  *     (unlike [SpigetAdapter]'s fully anonymous API) -- [authenticate]
  *     exchanges `JARLET_HANGAR_API_KEY` for a short-lived JWT, [get]
  *     re-authenticates once and retries on a 401 (expired/invalid JWT).
- *   - The JWT is process-scoped only, seeded from `JARLET_HANGAR_JWT` if a
- *     wrapping shell session already exported one. Unlike the bash version,
- *     this does NOT re-export the freshly minted JWT back out under that
- *     env var after authenticating -- bash's `export` only ever affected
- *     the (rare) case where `jarlet` itself was sourced rather than
- *     executed into its own subprocess; a compiled JVM binary invoked as a
- *     normal child process has no equivalent mechanism to hand a value back
- *     to its parent shell, so that half of the behavior has no meaningful
- *     Kotlin equivalent and is dropped. Reading a pre-set
- *     `JARLET_HANGAR_JWT` is still honored.
+ *   - The JWT is process-scoped only, seeded from `JARLET_HANGAR_JWT` if
+ *     the environment already provides one; a freshly minted JWT is never
+ *     written back out to the environment.
  *   - Hangar's `reviewState` enum (`unreviewed`/`reviewed`/`under_review`/
  *     `partially_reviewed`) has no "rejected" state -- `visibility` is what
  *     actually gates public availability, so any known `reviewState` is
@@ -69,7 +60,7 @@ object HangarAdapter : PluginSourceAdapter {
     private val versionListLimit: Int by lazy { SysConfig.default().value("HANGAR_VERSION_LIST_LIMIT").toInt() }
     private val versionListMaxPages: Int by lazy { SysConfig.default().value("HANGAR_VERSION_LIST_MAX_PAGES").toInt() }
 
-    /** In-memory JWT for this process only -- see the class doc for why this never round-trips back out to the environment the way the bash version's `export` attempted to. */
+    /** In-memory JWT for this process only -- never round-trips back out to the environment. */
     private var jwt: String? = System.getenv("JARLET_HANGAR_JWT")?.takeIf { it.isNotEmpty() }
 
     private fun authenticate() {
@@ -101,7 +92,7 @@ object HangarAdapter : PluginSourceAdapter {
         jwt = token
     }
 
-    /** Authenticated GET against `$HANGAR_API$path`. Re-authenticates once and retries on a 401. Mirrors `hangar_get()`. */
+    /** Authenticated GET against `$HANGAR_API$path`. Re-authenticates once and retries on a 401. */
     private fun get(path: String): String {
         if (jwt.isNullOrEmpty()) authenticate()
 
@@ -153,8 +144,8 @@ object HangarAdapter : PluginSourceAdapter {
         val channel = policy.channel ?: "Release"
 
         // Gated the same way as GithubAdapter/SpigetAdapter: only
-        // pin.isNullOrEmpty() && track in {minor, patch} deviates from
-        // today's plain /latest?channel=X behavior.
+        // pin.isNullOrEmpty() && track in {minor, patch} takes the
+        // version-list path; everything else uses /latest?channel=X.
         val useTrackBound = policy.pin.isNullOrEmpty() && (policy.track == "minor" || policy.track == "patch")
         val baseline = if (useTrackBound) {
             PluginStateStore.read(serverDir, sourceName, slug)?.versionName?.let { SemVer.parse(it) }
@@ -167,12 +158,10 @@ object HangarAdapter : PluginSourceAdapter {
             useTrackBound && baseline != null -> {
                 val entries = fetchVersionListEntries(slug, channel)
                 if (entries == null) {
-                    // The list endpoint's response shape is unverified
-                    // against a live Hangar API in this codebase (see class
-                    // doc) -- any network/parse failure is treated as "the
-                    // shape assumption was wrong" and degrades gracefully
-                    // rather than breaking update/start for every
-                    // Hangar-sourced plugin using minor/patch tracking.
+                    // Any network/parse failure from the version-list
+                    // endpoint degrades gracefully rather than breaking
+                    // update/start for every Hangar-sourced plugin using
+                    // minor/patch tracking.
                     Log.debug(
                         "could not use Hangar's version list for \"$slug\" (track=${policy.track}); falling back to latest for channel",
                     )
@@ -328,17 +317,12 @@ object HangarAdapter : PluginSourceAdapter {
      * Best-effort fetch of Hangar's project version *list* endpoint --
      * `GET /projects/{slug}/versions?limit=X&offset=Y&channel=Z`, paginated
      * up to [versionListMaxPages] pages of [versionListLimit] each (config
-     * values, `jarlet-sys.conf`). UNVERIFIED against a live Hangar
-     * response: this codebase has never called this endpoint before (only
-     * `/latest?channel=X` and `/versions/{name}`, see class doc), so the
-     * assumed `{ pagination: {...}, result: [...] }` wrapper shape may need
-     * adjustment on first real test run, the same way this file's other
-     * comments flag `reviewState`'s real enum values as discovered
-     * empirically. Any network or decode failure is caught and folded into
-     * a `null` return -- callers fall back to `/latest?channel=X` rather
-     * than propagating a hard failure, since a wrong shape assumption here
-     * must degrade gracefully, not break every Hangar-sourced
-     * minor/patch-tracked plugin.
+     * values, `jarlet-sys.conf`). Assumes a `{ pagination: {...}, result:
+     * [...] }` wrapper shape. Any network or decode failure is caught and
+     * folded into a `null` return -- callers fall back to
+     * `/latest?channel=X` rather than propagating a hard failure, so a
+     * shape mismatch degrades gracefully instead of breaking every
+     * Hangar-sourced minor/patch-tracked plugin.
      */
     private fun fetchVersionListEntries(slug: String, channel: String): List<HangarVersionListEntry>? =
         try {
@@ -376,17 +360,15 @@ object HangarAdapter : PluginSourceAdapter {
     private data class HangarChannel(val name: String? = null)
 
     /**
-     * Best-effort response wrapper for the version-*list* endpoint --
-     * see [fetchVersionListEntries]'s doc comment: UNVERIFIED against a
-     * live response, assumed to follow Hangar API v1's usual paginated-list
-     * shape (`{ pagination: {...}, result: [...] }`); `pagination` itself
-     * is never read since page-end is instead detected the same way
-     * [SpigetAdapter.resolvePinnedVersion] does (a short page).
+     * Response wrapper for the version-*list* endpoint -- follows Hangar
+     * API v1's paginated-list shape (`{ pagination: {...}, result: [...] }`);
+     * `pagination` itself is never read since page-end is instead detected
+     * the same way [SpigetAdapter.resolvePinnedVersion] does (a short page).
      */
     @Serializable
     private data class HangarVersionListResponse(val result: List<HangarVersionListEntry> = emptyList())
 
-    /** One entry of [HangarVersionListResponse.result] -- see its doc comment for the same unverified-shape caveat. */
+    /** One entry of [HangarVersionListResponse.result]. */
     @Serializable
     private data class HangarVersionListEntry(
         val name: String? = null,

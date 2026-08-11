@@ -22,15 +22,13 @@ import java.io.File
 import java.nio.file.Files
 
 /**
- * `jarlet start <name> [template-file] [--foreground] [--accept-eula]` --
- * Kotlin port of `src/server/start.sh`.
+ * `jarlet start <name> [template-file] [--foreground] [--accept-eula]`
  *
  * Sets the instance up first (via [me.devsnox.jarlet.server.ServerSetup.ensure]) if it doesn't
- * already exist, same as `start.sh` shelling out to `setup.sh`. Foreground
- * mode approximates bash's `exec java ...` (which replaces the shell
- * process) by running the JVM child to completion and exiting this process
- * with the same status code -- the JVM has no true process-image-replace
- * primitive, so this is the closest equivalent.
+ * already exist. Foreground mode runs the JVM child process to completion
+ * and exits this process with the same status code -- the JVM has no true
+ * process-image-replace primitive, so this is the closest equivalent to
+ * exec-ing straight into the server process.
  */
 class StartCommand : JarletCommand(name = "start") {
     override fun help(context: Context) = "Start a server instance, setting it up first if needed."
@@ -165,9 +163,9 @@ class StartCommand : JarletCommand(name = "start") {
                 // Left as a direct CliktCommand.echo(..., err = true), not
                 // Log -- these are raw lines tailed from the crashed
                 // server's own log file, not a Jarlet-authored message, so
-                // none of Log's four functions (each either silent by
-                // default or prefix-adding) is a faithful fit without
-                // changing this output's actual content.
+                // none of Log's functions (each either silent by default or
+                // prefix-adding) is a faithful fit without changing this
+                // output's actual content.
                 Files.readAllLines(logFile).takeLast(30).forEach { echo(it, err = true) }
             }
 

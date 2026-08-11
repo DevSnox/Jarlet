@@ -10,18 +10,14 @@ import me.devsnox.jarlet.Log
  * children) so each one accepts `--debug` in the position users actually
  * type it in.
  *
- * Background: [me.devsnox.jarlet.Jarlet] (the root command) declares
- * `--debug` itself and reads it in its own `run()`, which fires before any
- * subcommand body -- but Clikt scopes an option to whichever command's
- * token span it appears in on the command line. Tokens after a subcommand
- * name belong to that subcommand's own parser, not the root's, so
- * `jarlet --debug setup test3` worked while `jarlet setup test3 --debug`
- * (the order most users reach for first) failed with "no such option
- * --debug". There's no Clikt context flag (`allowInterspersedArgs` et al
- * -- checked against clikt-jvm 5.1.0's sources) that makes a
- * parent-declared option resolve after a subcommand token; the flag has to
- * be registered on whichever command instance actually owns those trailing
- * tokens.
+ * Clikt scopes an option to whichever command's token span it appears in
+ * on the command line: tokens after a subcommand name belong to that
+ * subcommand's own parser, not the root's. Without this, `jarlet --debug
+ * setup test3` would work while `jarlet setup test3 --debug` (the order
+ * most users reach for first) would fail with "no such option --debug".
+ * A parent-declared option cannot be made to resolve after a subcommand
+ * token, so the flag has to be registered on whichever command instance
+ * actually owns those trailing tokens.
  *
  * Registered via [eagerOption] rather than a plain `option().flag()`
  * property: the callback fires the moment the flag is parsed, independent

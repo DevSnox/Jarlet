@@ -20,22 +20,18 @@ import me.devsnox.jarlet.plugin.AdapterRegistry
 import me.devsnox.jarlet.config.PluginStateStore
 
 /**
- * `jarlet plugin list <name> [--page <n> | --all]` -- Kotlin port of
- * `src/plugin/list.sh`'s `cmd_list()`.
+ * `jarlet plugin list <name> [--page <n> | --all]`
  *
  * Combines the DECLARED `[[plugins]]` entries from a server's
  * `jarlet.toml` ([JarletToml.plugins]) with the INSTALLED state recorded
  * in `plugins-state.json` ([PluginStateStore.readAll]) into one merged,
- * paginated view, rendered as a Mordant table instead of `list.sh`'s
- * plain `printf` lines.
+ * paginated view, rendered as a Mordant table.
  *
- * Unlike `plugin.sh`'s single dispatcher (which resolves the server
- * directory/toml file/plugins JSON once in `main()` and threads them into
- * whichever subcommand ran), this command resolves its own server paths
- * directly (via [ServerPaths], shared with the server-lifecycle commands)
- * rather than through shared `PluginCommand`-level state -- see
+ * This command resolves its own server paths directly (via
+ * [ServerPaths], shared with the server-lifecycle commands) -- see
  * [PluginCommand]'s header for why each subcommand (this one, and
- * `add`/`remove`/`update`) does its own resolution instead.
+ * `add`/`remove`/`update`) does its own resolution instead of sharing
+ * state through a common dispatcher.
  */
 class ListCommand : JarletCommand(name = "list") {
 
@@ -104,10 +100,8 @@ class ListCommand : JarletCommand(name = "list") {
 
         val count = merged.size
 
-        // Mirrors list.sh's actual behavior (not its doc comment, which
-        // claims --page/--all are mutually exclusive but never enforces
-        // it): --all simply wins and bypasses pagination entirely,
-        // regardless of whether --page was also given.
+        // --all wins and bypasses pagination entirely, regardless of
+        // whether --page was also given.
         val (start, end, totalPages) = if (all) {
             Triple(0, count, 1)
         } else {

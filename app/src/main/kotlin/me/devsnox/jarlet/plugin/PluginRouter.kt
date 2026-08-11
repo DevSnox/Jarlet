@@ -5,26 +5,21 @@ import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.config.JarletToml
 
 /**
- * Kotlin port of `src/plugin/router.sh`'s routing/looping responsibility
- * (not its adapter-*loading* mechanism -- that's [AdapterRegistry], the
- * static map replacing `load_adapter()`'s dynamic sourcing). Decides which
- * registered [PluginSourceAdapter] a declared entry's `source` maps to and
- * calls it; owns the "process every declared plugin" (`run_update_all()`)
- * and "process one declared plugin" (`run_update_one()`) loops. Full
- * identifier resolution for the latter (`resolve.sh`'s
- * `resolve_declared_identifier()`) is [SourceResolver.resolveDeclaredIdentifier],
- * which [routeOne] calls directly.
+ * Decides which registered [PluginSourceAdapter] a declared entry's
+ * `source` maps to and calls it; owns the "process every declared plugin"
+ * ([routeAll]) and "process one declared plugin" ([routeOne]) loops.
+ * Adapter lookup itself is [AdapterRegistry]'s job. Full identifier
+ * resolution for [routeOne] is [SourceResolver.resolveDeclaredIdentifier].
  */
 object PluginRouter {
 
     /**
      * Routes a single declared entry ([source]/[id]/[policy]) to its
-     * source adapter via [AdapterRegistry]. Kotlin equivalent of
-     * `route_plugin()`. If no adapter is registered for [source], mirrors
-     * `route_plugin()`'s behavior exactly: prints a skip message via
-     * [Log.info] and returns normally (not an error -- an unregistered
-     * source in a declared entry is expected today, since no adapters are
-     * implemented until phase 4).
+     * source adapter via [AdapterRegistry]. If no adapter is registered
+     * for [source], prints a skip message via [Log.info] and returns
+     * normally rather than treating it as an error -- a stale or
+     * hand-edited `jarlet.toml` entry naming an unregistered source is an
+     * expected, non-fatal case.
      */
     fun route(
         serverDir: Path,
@@ -44,10 +39,7 @@ object PluginRouter {
     }
 
     /**
-     * Routes every entry in [declared]. Kotlin equivalent of
-     * `run_update_all()`, including its "bare invocation with no
-     * subcommand" / "explicit `update` with no target" behavior of
-     * processing everything, and its "No plugins declared" message when
+     * Routes every entry in [declared], printing "No plugins declared" if
      * [declared] is empty.
      *
      * Each entry is routed independently: an adapter failure for one
@@ -80,11 +72,9 @@ object PluginRouter {
     /**
      * Routes exactly one declared entry, identified by [identifier]
      * matched against [toml]'s declared entries by `id` alone (ids are
-     * expected to be globally unique per server -- same assumption
-     * `resolve.sh`'s header documents). Kotlin equivalent of
-     * `run_update_one()`: [identifier] is resolved via
+     * globally unique per server). [identifier] is resolved via
      * [SourceResolver.resolveDeclaredIdentifier], the same machinery
-     * `RemoveCommand` already uses, rather than a bespoke inline lookup.
+     * [me.devsnox.jarlet.command.RemoveCommand] uses.
      */
     fun routeOne(
         serverDir: Path,

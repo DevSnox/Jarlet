@@ -48,6 +48,11 @@ jarlet plugin add <name> <identifier> [--pin <version> | --channel <name>] [--so
 jarlet plugin remove <name> <identifier>   Undeclare a plugin and delete its installed jar
 jarlet plugin update <name> <identifier|*> Update one declared plugin, or all of them with *
 jarlet plugin list <name>                  List declared plugins and their installed state
+jarlet plugin track <name> <identifier> [--pin <version> | --channel <name> | --track minor|patch]
+                                            Change a declared plugin's update policy
+
+jarlet track <name> [--pin <version> | --channel <name> | --track minor|patch]
+                                            Change a server's update policy
 ```
 
 Run any command with `--help` for its full option list.
@@ -82,6 +87,8 @@ track = "channel"
 ```
 
 `policy` controls how updates are picked: `track = "channel"` follows a named release channel (`channel = "..."`), `track = "minor"`/`"patch"` stays within a semver bound, and `pin = "<exact version>"` locks to one version. `[server].policy` and each plugin's `[plugins.policy]` work the same way. Pass your own template file to `jarlet setup <name> <template-file>` to start from something other than the default.
+
+Change a policy after the fact with `jarlet track`/`jarlet plugin track` instead of hand-editing `jarlet.toml`, e.g. `jarlet plugin track myserver WorldEdit --track minor`.
 
 ---
 

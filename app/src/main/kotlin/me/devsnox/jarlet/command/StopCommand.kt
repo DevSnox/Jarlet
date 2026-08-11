@@ -11,13 +11,10 @@ import me.devsnox.jarlet.server.ServerPaths
 import java.nio.file.Files
 
 /**
- * `jarlet stop <name>` -- Kotlin port of `src/server/stop.sh`.
+ * `jarlet stop <name>`
  *
- * Unlike the bash version (which deliberately keeps its own inline
- * `fail()`/`config_value()`/`sys_config_value()`/`servers_root()` copies
- * rather than sourcing `lib.sh`, since it has no TOML-config dependency of
- * its own), this reuses [me.devsnox.jarlet.server.ServerPaths]/[SysConfig] directly -- there's no
- * equivalent reason to duplicate that logic in Kotlin.
+ * Reuses [me.devsnox.jarlet.server.ServerPaths]/[SysConfig] for path and
+ * config resolution rather than duplicating that logic here.
  */
 class StopCommand : JarletCommand(name = "stop") {
     override fun help(context: Context) = "Stop a running server instance."
