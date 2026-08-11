@@ -12,8 +12,7 @@ import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 
 /**
- * The core trust-fallback gate for an externally-hosted plugin download --
- * Kotlin port of `src/plugin/trust.sh`'s `handle_untrusted_external_url()`,
+ * The core trust-fallback gate for an externally-hosted plugin download,
  * called by an adapter's external-hosting check after
  * [ExternalUrlRedirector.tryResolve] has already failed to recognize the
  * URL as belonging to a known adapter. Handles all three outcomes itself
@@ -22,11 +21,10 @@ import java.nio.file.StandardCopyOption
  * [SpigetAdapter] each need only one call site instead of duplicating this
  * branching.
  *
- * Never throws for "not trusted, not requested" (mirrors the bash
- * function's "skip is not a failure" convention, matching every adapter's
- * `return 0` on a skip) -- only throws once a download has actually been
- * allowed to start and then fails outright (network failure, verified
- * checksum mismatch, empty file).
+ * Never throws for "not trusted, not requested" -- a skip is not a
+ * failure -- only throws once a download has actually been allowed to
+ * start and then fails outright (network failure, verified checksum
+ * mismatch, empty file).
  */
 object UntrustedExternalDownloader {
     /** Thrown only once a trusted-domain download has actually started and then fails. */
@@ -41,7 +39,7 @@ object UntrustedExternalDownloader {
      * @param expectedSize optional, same rationale as [expectedHash]
      * @param fallbackFilename used when the download has no usable `Content-Disposition` filename
      * @param trustRequested threaded down from the CLI's `--trust` flag
-     * @param versionName OPTIONAL real version identity, when the caller already resolved one before reaching the external-hosting branch (Hangar's case -- see the param doc on `handle_untrusted_external_url()` in `trust.sh` for the full reasoning). Defaults to the literal `"external"` (deliberately not null/empty -- see below) for callers with no version context (Spiget's case).
+     * @param versionName OPTIONAL real version identity, when the caller already resolved one before reaching the external-hosting branch (Hangar's case). Defaults to the literal `"external"` (deliberately not null/empty -- see below) for callers with no version context (Spiget's case).
      * @param channelName OPTIONAL, same rationale as [versionName]
      */
     fun handle(
@@ -110,19 +108,12 @@ object UntrustedExternalDownloader {
                 }
                 expectedSize != null && expectedSize > 0 -> {
                     if (download.size != expectedSize) {
-                        // Stays on stdout (Log.info, not Log.warn) -- this
-                        // was a plain println() before this migration, not
-                        // one routed to stderr, so Log.warn()'s stderr
-                        // stream would be a real behavior change here.
-                        // "Warning: " is kept as literal text (not
-                        // Log.warn()'s own prefix) for the same reason.
                         Log.info(
                             "Warning: \"$label\" downloaded size (${download.size} bytes) does not match the expected size ($expectedSize bytes) -- no cryptographic checksum was available to verify further, proceeding anyway since this domain is trusted",
                         )
                     }
                 }
                 else -> {
-                    // See the comment above -- same stdout-preserving rationale.
                     Log.info(
                         "Warning: no checksum or size is available to verify this trusted external download -- \"$label\" was fetched as-is from $externalUrl with no cryptographic verification",
                     )
@@ -134,11 +125,11 @@ object UntrustedExternalDownloader {
             Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING)
 
             // The externally-hosted download's filename may differ from
-            // what was previously recorded for this source+id (the
-            // confirmed live Hangar/Geyser case: `Geyser.jar` on one
-            // version, `Geyser-Spigot.jar` on another) -- remove the
-            // now-stale jar only now that the replacement is verified and
-            // on disk. Must run before write() overwrites the old record.
+            // what was previously recorded for this source+id (e.g.
+            // Hangar's Geyser project: `Geyser.jar` on one version,
+            // `Geyser-Spigot.jar` on another) -- remove the now-stale jar
+            // only now that the replacement is verified and on disk. Must
+            // run before write() overwrites the old record.
             PluginStateStore.deleteStaleFile(serverDir, pluginsDir, source, id, fileName)
 
             // version_name: real version identity when the caller has one to
@@ -157,7 +148,7 @@ object UntrustedExternalDownloader {
             // When the caller left `versionName` at that generic default
             // (Spiget's case), OR passed a value that is really just the
             // adapter's own `id` echoed back rather than a genuine version
-            // (Hangar's live Geyser data: `/latest?channel=...` resolves to
+            // (Hangar's Geyser project: `/latest?channel=...` resolves to
             // the literal label "Geyser", i.e. Hangar's channel-latest label
             // for this project equals its own project id -- a known Hangar
             // data quirk, not a real version identity), best-effort-check

@@ -12,11 +12,10 @@ import java.nio.file.Path
 import java.nio.file.Paths
 
 /**
- * Core "materialize a server instance directory from a template" logic --
- * ported from `src/server/setup.sh`, factored out of [me.devsnox.jarlet.command.SetupCommand] so
- * [me.devsnox.jarlet.command.StartCommand] can call it directly for its auto-setup-if-missing
- * fallback (`start.sh` shells out to `setup.sh` for the same reason; this
- * is the in-process Kotlin equivalent).
+ * Core "materialize a server instance directory from a template" logic,
+ * factored out of [me.devsnox.jarlet.command.SetupCommand] so
+ * [me.devsnox.jarlet.command.StartCommand] can call it directly for its
+ * auto-setup-if-missing fallback.
  */
 internal object ServerSetup {
     private val VALID_VERSION = Regex("^[0-9A-Za-z._-]+$")
@@ -53,7 +52,7 @@ internal object ServerSetup {
         }
 
         // Resolves (and thereby validates) the package before touching the
-        // filesystem, matching setup.sh's ordering.
+        // filesystem.
         val adapter = ServerSoftwareAdapters.find(server.pkg)
 
         try {
@@ -62,14 +61,11 @@ internal object ServerSetup {
             val serverJar = serverDir.resolve("server.jar")
             if (!Files.isRegularFile(serverJar)) {
                 val installedVersion = adapter.install(server.minecraftVersion, serverJar, server.policy)
-                // Pre-existing gap closed here: without this, StartCommand's
-                // own drift-check (ServerStateStore.read(serverDir) ==
-                // null) would see no recorded state right after a fresh
-                // `jarlet setup` and unconditionally reinstall on the very
-                // next `jarlet start`, wasting a redundant network
-                // round-trip every first run. Mirrors exactly what
-                // StartCommand now does with adapter.install()'s return
-                // value.
+                // Recording this here means StartCommand's own drift-check
+                // (ServerStateStore.read(serverDir) == null) sees a real
+                // record right after `jarlet setup`, instead of
+                // unconditionally reinstalling on the very next `jarlet
+                // start` and wasting a redundant network round-trip.
                 ServerStateStore.write(serverDir, InstalledServer(pkg = server.pkg, minecraftVersion = installedVersion))
             }
 
@@ -90,11 +86,10 @@ internal object ServerSetup {
             }
 
             // The instance name lives only in the directory name / CLI arg,
-            // never in the template itself (server-templating.md), so the
-            // per-server copy is a plain, unmodified (byte-for-byte) copy of
-            // the source template -- not a re-serialize through [JarletToml],
-            // which would drop comments/formatting the same way
-            // `json_to_toml()` does in the bash version.
+            // never in the template itself, so the per-server copy is a
+            // plain, unmodified (byte-for-byte) copy of the source template
+            // -- not a re-serialize through [JarletToml], which would drop
+            // comments/formatting (see [JarletToml.write]'s doc comment).
             Files.copy(configPath, serverDir.resolve(templateName))
         } catch (exception: Exception) {
             // Roll back: everything under serverDir was created by THIS call
@@ -112,7 +107,7 @@ internal object ServerSetup {
         return Result(serverDir, toml)
     }
 
-    /** Reads a `jarlet.toml`-shaped file at [path], wrapping parse failures the way `toml_to_json()`'s callers do. */
+    /** Reads a `jarlet.toml`-shaped file at [path], wrapping I/O and parse failures into a [ServerCommandException]. */
     fun readToml(path: Path): JarletToml =
         try {
             JarletToml.read(path)
@@ -167,7 +162,7 @@ internal object ServerSetup {
         return tempFile
     }
 
-    /** Mirrors `resolve_path()`: resolves to an absolute path, failing if its parent directory doesn't exist. */
+    /** Resolves to an absolute path, failing if its parent directory doesn't exist. */
     private fun resolvePath(path: String): Path {
         val requested = Paths.get(path)
         val resolved = requested.toAbsolutePath().normalize()

@@ -137,8 +137,7 @@ object PaperAdapter : ServerSoftwareAdapter {
     /**
      * Fetches [url] as text via [SharedHttp.get], folding every failure mode into a
      * [PaperAdapterException] whose message is prefixed with [errorPrefix] but distinguishes
-     * *why* -- network error, a non-2xx status (with the code), or an empty body -- since
-     * callers previously couldn't tell these apart.
+     * *why* -- network error, a non-2xx status (with the code), or an empty body.
      */
     private fun get(url: String, errorPrefix: String): String {
         val response = try {

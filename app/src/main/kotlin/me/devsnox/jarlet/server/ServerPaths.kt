@@ -5,13 +5,7 @@ import me.devsnox.jarlet.config.SysConfig
 import java.nio.file.Path
 import java.nio.file.Paths
 
-/**
- * Shared server-instance name/path helpers -- Kotlin port of the pieces of
- * `src/lib/lib.sh` (`servers_root()`, `template_filename()`, and the
- * `^[0-9A-Za-z_-]+$` name-validation regex repeated across
- * `install.sh`/`setup.sh`/`start.sh`/`stop.sh`) every server lifecycle
- * command needs.
- */
+/** Shared server-instance name/path helpers every server lifecycle command needs. */
 object ServerPaths {
     private val VALID_NAME = Regex("^[0-9A-Za-z_-]+$")
 
@@ -28,7 +22,7 @@ object ServerPaths {
      */
     internal const val SERVERS_DIR_PROPERTY = "jarlet.serversDir"
 
-    /** Validates a server instance name, failing the way every bash script's inline check does. */
+    /** Validates a server instance name. */
     fun validateName(name: String): String {
         if (!VALID_NAME.matches(name)) {
             throw ServerCommandException("Server name must be a simple name (letters, digits, _-)")
@@ -36,7 +30,7 @@ object ServerPaths {
         return name
     }
 
-    /** Mirrors `servers_root()`: [SERVERS_DIR_PROPERTY] system property (tests only) or `$JARLET_SERVERS_DIR` env override (must be absolute) if set, else `SERVERS_DIR_DEFAULT` from sys config, with `$HOME` expanded. */
+    /** [SERVERS_DIR_PROPERTY] system property (tests only) or `$JARLET_SERVERS_DIR` env override (must be absolute) if set, else `SERVERS_DIR_DEFAULT` from sys config, with `$HOME` expanded. */
     fun serversRoot(): Path {
         val override = System.getProperty(SERVERS_DIR_PROPERTY) ?: System.getenv("JARLET_SERVERS_DIR")
         if (!override.isNullOrEmpty()) {
@@ -55,6 +49,6 @@ object ServerPaths {
     /** The instance directory for a validated server [name] under [serversRoot]. */
     fun serverDir(name: String): Path = serversRoot().resolve(validateName(name))
 
-    /** Mirrors `template_filename()`: the standard per-server template/instance filename (`jarlet.toml`). */
+    /** The standard per-server template/instance filename (`jarlet.toml`). */
     fun templateFilename(): String = SysConfig.default().value("TEMPLATE_FILENAME")
 }

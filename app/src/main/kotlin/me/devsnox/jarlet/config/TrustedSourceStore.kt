@@ -3,7 +3,6 @@ package me.devsnox.jarlet.config
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.Paths
 import java.nio.file.StandardOpenOption
 
 /**
@@ -27,8 +26,7 @@ import java.nio.file.StandardOpenOption
  * that exact string would be trust in name only, since the actual bytes
  * behind it change over time regardless.
  *
- * Persisted under a `JARLET_HOME` env var override, falling back to
- * `~/jarlet` -- the same root
+ * Persisted under [JarletHome] -- the same root
  * [me.devsnox.jarlet.server.ServerPaths.serversRoot]'s default
  * (`~/jarlet/servers`) sits under, keeping every Jarlet-managed file under
  * one predictable home directory absent an explicit override.
@@ -36,10 +34,8 @@ import java.nio.file.StandardOpenOption
 object TrustedSourceStore {
     /** The global trust-list file (not guaranteed to exist yet -- [isTrusted] handles that; [trust] is the only writer and creates it on first use). */
     fun file(): Path {
-        val home = System.getenv("JARLET_HOME")?.takeIf { it.isNotEmpty() }
-            ?: Paths.get(System.getProperty("user.home"), "jarlet").toString()
         val filename = SysConfig.default().value("TRUSTED_SOURCES_FILENAME")
-        return Paths.get(home).resolve(filename)
+        return JarletHome.resolve().resolve(filename)
     }
 
     /** Extracts the host (domain, port stripped) from [url], e.g. `"https://download.geysermc.org/v2/..."` -> `"download.geysermc.org"`. */
