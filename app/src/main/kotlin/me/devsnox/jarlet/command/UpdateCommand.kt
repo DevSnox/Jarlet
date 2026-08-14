@@ -22,7 +22,7 @@ class UpdateCommand : JarletCommand(name = "update") {
     override fun help(context: Context) = "Fetch the latest matching version for one or all declared plugins."
 
     private val name by argument(name = "name", help = "Server name (a directory under the servers root).")
-    private val identifier by argument(name = "identifier", help = "Declared plugin id to update, or \"*\" to update everything declared.")
+    private val identifier by argument(name = "identifier", help = "Declared plugin id; use \"*\" to update all declared plugins.")
 
     private val trust by option("--trust", help = "Proceed past an external-hosting gate this adapter can't otherwise resolve.")
         .flag(default = false)

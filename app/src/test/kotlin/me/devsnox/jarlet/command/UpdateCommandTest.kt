@@ -41,7 +41,7 @@ class UpdateCommandTest : CommandTestSupport() {
 
     @Test
     fun `updating a non-existent server is rejected`() {
-        val result = Jarlet().test(listOf("plugin", "update", "no-such-server"))
+        val result = Jarlet().test(listOf("plugin", "update", "no-such-server", "*"))
 
         assertEquals(1, result.statusCode)
         assertTrue(result.stderr.contains("No server named 'no-such-server' found"), "got: ${result.stderr}")
