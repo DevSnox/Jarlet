@@ -86,7 +86,10 @@ object CopyService {
         val mergedServer = selectedServer.firstOrNull()?.targetDeclaration(request.packageMode)
             ?: targetToml.server
         val mergedPlugins = targetToml.plugins
-            .filterNot { target -> selectedPlugins.any { it.declaration.source == target.source && it.declaration.id == target.id } } +
+            // Plugin IDs are globally unique in Jarlet, even when the source
+            // changes. Replace a target declaration by logical ID so a copy
+            // cannot create two declarations for the same plugin.
+            .filterNot { target -> selectedPlugins.any { it.declaration.id.equals(target.id, ignoreCase = true) } } +
             selectedPlugins.map { it.targetDeclaration(request.packageMode) }
 
         return CopyPlan(request, changes, targetToml.copy(server = mergedServer, plugins = mergedPlugins))

@@ -113,6 +113,14 @@ Resource selectors map to package declarations or existing Minecraft world
 directories. `data.world.<name>` replaces a positively validated world
 directory. No Jarlet-specific data or package directories are created.
 
+For example:
+
+```bash
+jarlet copy prod/survival test/survival package.plugin.LuckPerms data.world.world
+jarlet copy prod/survival test/survival package.server --resolved-pin
+jarlet copy-environment prod test package.plugin.* data.world.*
+```
+
 ## What Jarlet handles
 
 - Versioned server templates
