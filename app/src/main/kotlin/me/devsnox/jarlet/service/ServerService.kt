@@ -53,8 +53,41 @@ object ServerService {
 
     data class ServerTrackResult(val policy: JarletToml.Policy, val policyDisplay: String, val tomlFile: Path)
 
+    data class ServerPackageReconcileResult(
+        val packageName: String,
+        val minecraftVersion: String,
+        val serverJar: Path,
+        val installed: Boolean,
+    )
+
     /** Materializes a new server instance directory from a template. See [ServerSetup.ensure]. */
     internal fun setup(name: String, templateFile: String?): ServerSetup.Result = ServerSetup.ensure(name, templateFile)
+
+    /** Reconciles only the declared server package; runtime settings are untouched. */
+    fun reconcilePackage(name: String): ServerPackageReconcileResult {
+        ServerPaths.validateName(name)
+        val serverDir = ServerPaths.serverDir(name)
+        val config = serverDir.resolve(ServerPaths.templateFilename())
+        if (!Files.isRegularFile(config)) {
+            throw JarletServiceException.NotFound("$config does not exist")
+        }
+        val toml = ServerSetup.readToml(config)
+        val server = toml.server
+        val adapter = ServerSoftwareAdapters.find(server.pkg)
+        val serverJar = serverDir.resolve("server.jar")
+        val installed = ServerStateStore.read(serverDir)
+        val needsInstall = !Files.isRegularFile(serverJar) ||
+            installed == null || installed.pkg != server.pkg || installed.minecraftVersion != server.minecraftVersion
+        if (needsInstall) {
+            Files.createDirectories(serverDir)
+            val installedVersion = adapter.install(server.minecraftVersion, serverJar, server.policy)
+            ServerStateStore.write(serverDir, InstalledServer(pkg = server.pkg, minecraftVersion = installedVersion))
+        }
+        if (!Files.isRegularFile(serverJar)) {
+            throw JarletServiceException.OperationFailed("server.jar installation failed")
+        }
+        return ServerPackageReconcileResult(server.pkg, server.minecraftVersion, serverJar, needsInstall)
+    }
 
     /**
      * Everything a `start` needs before actually launching the process:

@@ -41,7 +41,8 @@ Want another source? Open an issue.
 ## Commands
 
 ```
-jarlet setup <name> [template-file]        Create a new server instance from a template
+jarlet setup <name|environment/name> [template-file]
+                                            Create a new server instance from a template
 jarlet start <name> [--accept-eula] [--foreground]
                                             Start a server, setting it up first if needed
 jarlet stop <name>                         Stop a running server instance
@@ -63,7 +64,7 @@ Run any command with `--help` for its full option list.
 
 ## Configuration
 
-Each server instance has its own `jarlet.toml`, generated from a template on `setup`. The bundled default template looks like this:
+Each server instance has its own `jarlet.toml`, generated from a template on `setup`. Names may be plain (`survival`) or namespaced (`prod/survival`); namespaced instances are stored under `JARLET_SERVERS_DIR/<environment>/<name>`. An optional `environments.toml` at the root can describe environment names without owning instance configuration. The bundled default template looks like this:
 
 ```toml
 [template]
@@ -100,6 +101,17 @@ jarlet start my-server --accept-eula --foreground
 ```
 
 Change a policy after the fact with `jarlet track`/`jarlet plugin track` instead of hand-editing `jarlet.toml`, e.g. `jarlet plugin track myserver WorldEdit --track minor`.
+
+The service layer also supports selective local state transfers between
+instances using selectors such as `data.world.*`, `package.plugin.*`, and
+`package.server`. Plugin transfers reconcile through Jarlet's package resolver
+rather than copying JARs or state files directly. Optional root-level `environments.toml` and `topology.toml` files
+describe environment metadata and desired proxy backends; runtime proxy
+registration is reconciled through the configured proxy provider.
+
+Resource selectors map to package declarations or existing Minecraft world
+directories. `data.world.<name>` replaces a positively validated world
+directory. No Jarlet-specific data or package directories are created.
 
 ## What Jarlet handles
 
