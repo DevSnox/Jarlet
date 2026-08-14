@@ -47,7 +47,7 @@ class JarletCommandTest {
         val result = Jarlet().test("--help")
 
         assertEquals(0, result.statusCode)
-        for (subcommand in listOf("install", "setup", "start", "stop", "plugin")) {
+        for (subcommand in listOf("copy", "copy-environment", "install", "setup", "start", "stop", "plugin")) {
             assertTrue(result.output.contains(subcommand), "expected \"$subcommand\" in --help output, got: ${result.output}")
         }
     }
