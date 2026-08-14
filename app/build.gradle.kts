@@ -117,6 +117,7 @@ val generatedVersionDir = layout.buildDirectory.dir("generated/source/version/ko
 val generateVersion by tasks.registering {
     val outputDir = generatedVersionDir
     val versionValue = version.toString()
+    inputs.property("jarletVersion", versionValue)
     outputs.dir(outputDir)
 
     doLast {
