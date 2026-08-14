@@ -2,16 +2,18 @@
 description = 'Default Jarlet server template'
 name = 'default'
 
-[server]
-memory = '2G'
-minecraft_version = '26.2'
-online_mode = true
-port = 25565
-package = 'paper'
+[server.package]
+name = 'paper'
+version = '26.2'
 
 [server.policy]
 channel = 'Release'
 track = 'channel'
+
+[server.runtime]
+memory = '2G'
+online_mode = true
+port = 25565
 
 [[plugins]]
 id = 'WorldEdit'

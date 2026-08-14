@@ -23,11 +23,8 @@ class SourceResolverTest {
     private fun toml(vararg plugins: JarletToml.Plugin) = JarletToml(
         template = JarletToml.Template(name = "test-template"),
         server = JarletToml.Server(
-            pkg = "paper",
-            minecraftVersion = "1.21.1",
-            memory = "2G",
-            port = 25565,
-            onlineMode = true,
+            packageInfo = JarletToml.ServerPackage("paper", "1.21.1"),
+            runtime = JarletToml.ServerRuntime("2G", 25565, true),
         ),
         plugins = plugins.toList(),
     )

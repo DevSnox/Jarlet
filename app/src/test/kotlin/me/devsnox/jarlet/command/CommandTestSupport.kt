@@ -106,11 +106,8 @@ abstract class CommandTestSupport {
     ): JarletToml = JarletToml(
         template = JarletToml.Template(name = "test-template", description = "A hand-crafted test template"),
         server = JarletToml.Server(
-            pkg = pkg,
-            minecraftVersion = minecraftVersion,
-            memory = memory,
-            port = port,
-            onlineMode = onlineMode,
+            packageInfo = JarletToml.ServerPackage(pkg, minecraftVersion),
+            runtime = JarletToml.ServerRuntime(memory, port, onlineMode),
         ),
         plugins = plugins,
     )

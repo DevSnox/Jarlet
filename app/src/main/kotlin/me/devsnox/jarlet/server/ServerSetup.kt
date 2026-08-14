@@ -44,29 +44,29 @@ internal object ServerSetup {
         val toml = readToml(configPath)
         val server = toml.server
 
-        if (!VALID_VERSION.matches(server.minecraftVersion)) {
-            throw JarletServiceException.InvalidInput("Invalid [server].minecraft_version")
+        if (!VALID_VERSION.matches(server.packageInfo.version)) {
+            throw JarletServiceException.InvalidInput("Invalid [server.package].version")
         }
-        if (server.port !in 1..65535) {
-            throw JarletServiceException.InvalidInput("Invalid [server].port")
+        if (server.runtime.port !in 1..65535) {
+            throw JarletServiceException.InvalidInput("Invalid [server.runtime].port")
         }
 
         // Resolves (and thereby validates) the package before touching the
         // filesystem.
-        val adapter = ServerSoftwareAdapters.find(server.pkg)
+        val adapter = ServerSoftwareAdapters.find(server.packageInfo.name)
 
         try {
             Files.createDirectories(serverDir)
 
             val serverJar = serverDir.resolve("server.jar")
             if (!Files.isRegularFile(serverJar)) {
-                val installedVersion = adapter.install(server.minecraftVersion, serverJar, server.policy)
+                val installedVersion = adapter.install(server.packageInfo.version, serverJar, server.policy)
                 // Recording this here means StartCommand's own drift-check
                 // (ServerStateStore.read(serverDir) == null) sees a real
                 // record right after `jarlet setup`, instead of
                 // unconditionally reinstalling on the very next `jarlet
                 // start` and wasting a redundant network round-trip.
-                ServerStateStore.write(serverDir, InstalledServer(pkg = server.pkg, minecraftVersion = installedVersion))
+                ServerStateStore.write(serverDir, InstalledServer(pkg = server.packageInfo.name, minecraftVersion = installedVersion))
             }
 
             val eulaFile = serverDir.resolve("eula.txt")
@@ -78,8 +78,8 @@ internal object ServerSetup {
             if (!Files.isRegularFile(propertiesFile)) {
                 Files.writeString(
                     propertiesFile,
-                    "server-port=${server.port}\n" +
-                        "online-mode=${server.onlineMode}\n" +
+                    "server-port=${server.runtime.port}\n" +
+                        "online-mode=${server.runtime.onlineMode}\n" +
                         "motd=A Jarlet Minecraft Server\n" +
                         "enable-command-block=false\n",
                 )

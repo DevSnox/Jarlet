@@ -13,7 +13,7 @@ import me.devsnox.jarlet.config.ServerStateStore
  * `jarlet start <name> [template-file] [--foreground] [--accept-eula]`
  * coverage restricted to paths that never touch the network and never
  * spawn a real `java` subprocess: argument validation, the
- * `[server].memory`/`.minecraft_version`/`.package` guards (hit by
+ * `[server.runtime]`/`[server.package]` guards (hit by
  * hand-crafting a `jarlet.toml` so the "auto-setup if missing" fallback
  * never runs), the EULA-acceptance gate, and the "already running" guard.
  *
@@ -48,17 +48,17 @@ class StartCommandTest : CommandTestSupport() {
         val result = Jarlet().test(listOf("start", "myserver"))
 
         assertEquals(1, result.statusCode)
-        assertTrue(result.stderr.contains("[server].memory must look like 2G or 2048M"), "got: ${result.stderr}")
+        assertTrue(result.stderr.contains("[server.runtime].memory must look like 2G or 2048M"), "got: ${result.stderr}")
     }
 
     @Test
-    fun `an invalid minecraft_version in an existing jarlet toml is rejected`() {
+    fun `an invalid package version in an existing jarlet toml is rejected`() {
         writeServerToml("myserver", defaultToml(minecraftVersion = "not a version!"))
 
         val result = Jarlet().test(listOf("start", "myserver"))
 
         assertEquals(1, result.statusCode)
-        assertTrue(result.stderr.contains("Invalid [server].minecraft_version"), "got: ${result.stderr}")
+        assertTrue(result.stderr.contains("Invalid [server.package].version"), "got: ${result.stderr}")
     }
 
     @Test
@@ -68,7 +68,7 @@ class StartCommandTest : CommandTestSupport() {
         val result = Jarlet().test(listOf("start", "myserver"))
 
         assertEquals(1, result.statusCode)
-        assertTrue(result.stderr.contains("Unknown [server].package 'not-a-real-package'"), "got: ${result.stderr}")
+        assertTrue(result.stderr.contains("Unknown [server.package].name 'not-a-real-package'"), "got: ${result.stderr}")
     }
 
     @Test
@@ -134,7 +134,7 @@ class StartCommandTest : CommandTestSupport() {
     }
 
     @Test
-    fun `a minecraft_version differing from the recorded server-state triggers a reinstall attempt`() {
+    fun `a package version differing from the recorded server-state triggers a reinstall attempt`() {
         // A version that's pattern-valid (passes StartCommand's own regex
         // guard) but doesn't exist on Paper's real project -- this makes
         // the reinstall attempt fail deterministically regardless of
@@ -196,7 +196,7 @@ class StartCommandTest : CommandTestSupport() {
         // was reached and attempted.
         assertEquals(1, result.statusCode)
         assertTrue(
-            !result.stderr.contains("--accept-eula") && !result.stderr.contains("[server]."),
+            !result.stderr.contains("--accept-eula") && !result.stderr.contains("[server."),
             "expected an install-stage failure, not an argument/config-validation failure, got: ${result.stderr}",
         )
     }

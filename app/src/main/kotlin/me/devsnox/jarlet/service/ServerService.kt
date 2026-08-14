@@ -73,26 +73,26 @@ object ServerService {
         }
         val toml = ServerSetup.readToml(config)
         val server = toml.server
-        val adapter = ServerSoftwareAdapters.find(server.pkg)
+        val adapter = ServerSoftwareAdapters.find(server.packageInfo.name)
         val serverJar = serverDir.resolve("server.jar")
         val installed = ServerStateStore.read(serverDir)
         val needsInstall = !Files.isRegularFile(serverJar) ||
-            installed == null || installed.pkg != server.pkg || installed.minecraftVersion != server.minecraftVersion
+            installed == null || installed.pkg != server.packageInfo.name || installed.minecraftVersion != server.packageInfo.version
         if (needsInstall) {
             Files.createDirectories(serverDir)
-            val installedVersion = adapter.install(server.minecraftVersion, serverJar, server.policy)
-            ServerStateStore.write(serverDir, InstalledServer(pkg = server.pkg, minecraftVersion = installedVersion))
+            val installedVersion = adapter.install(server.packageInfo.version, serverJar, server.policy)
+            ServerStateStore.write(serverDir, InstalledServer(pkg = server.packageInfo.name, minecraftVersion = installedVersion))
         }
         if (!Files.isRegularFile(serverJar)) {
             throw JarletServiceException.OperationFailed("server.jar installation failed")
         }
-        return ServerPackageReconcileResult(server.pkg, server.minecraftVersion, serverJar, needsInstall)
+        return ServerPackageReconcileResult(server.packageInfo.name, server.packageInfo.version, serverJar, needsInstall)
     }
 
     /**
      * Everything a `start` needs before actually launching the process:
-     * auto-setup if the instance doesn't exist yet, `[server].memory`/
-     * `minecraft_version` validation, the EULA gate, installing/
+     * auto-setup if the instance doesn't exist yet, `[server.runtime].memory`/
+     * `[server.package].version` validation, the EULA gate, installing/
      * reinstalling `server.jar` on drift, routing every declared plugin,
      * and the "already running" guard. Returns the launch command and the
      * directory to launch it from; throws [JarletServiceException] on any
@@ -112,14 +112,14 @@ object ServerService {
         val toml = ServerSetup.readToml(config)
         val server = toml.server
 
-        if (!MEMORY_PATTERN.matches(server.memory)) {
-            throw JarletServiceException.InvalidInput("[server].memory must look like 2G or 2048M")
+        if (!MEMORY_PATTERN.matches(server.runtime.memory)) {
+            throw JarletServiceException.InvalidInput("[server.runtime].memory must look like 2G or 2048M")
         }
-        if (!VERSION_PATTERN.matches(server.minecraftVersion)) {
-            throw JarletServiceException.InvalidInput("Invalid [server].minecraft_version")
+        if (!VERSION_PATTERN.matches(server.packageInfo.version)) {
+            throw JarletServiceException.InvalidInput("Invalid [server.package].version")
         }
 
-        val adapter = ServerSoftwareAdapters.find(server.pkg)
+        val adapter = ServerSoftwareAdapters.find(server.packageInfo.name)
 
         val eulaFile = serverDir.resolve("eula.txt")
         val eulaAccepted = Files.isRegularFile(eulaFile) &&
@@ -137,16 +137,16 @@ object ServerService {
         val serverJar = serverDir.resolve("server.jar")
         val installedServer = ServerStateStore.read(serverDir)
         val serverDrifted = installedServer == null ||
-            installedServer.pkg != server.pkg ||
-            installedServer.minecraftVersion != server.minecraftVersion
+            installedServer.pkg != server.packageInfo.name ||
+            installedServer.minecraftVersion != server.packageInfo.version
         val jarMissing = !Files.isRegularFile(serverJar)
 
         if (jarMissing || serverDrifted) {
             if (!jarMissing && serverDrifted) {
                 Log.info("jarlet.toml no longer matches the installed server.jar (was ${installedServer?.pkg} ${installedServer?.minecraftVersion}); reinstalling")
             }
-            val installedVersion = adapter.install(server.minecraftVersion, serverJar, server.policy)
-            ServerStateStore.write(serverDir, InstalledServer(pkg = server.pkg, minecraftVersion = installedVersion))
+            val installedVersion = adapter.install(server.packageInfo.version, serverJar, server.policy)
+            ServerStateStore.write(serverDir, InstalledServer(pkg = server.packageInfo.name, minecraftVersion = installedVersion))
         }
         if (!Files.isRegularFile(serverJar)) {
             throw JarletServiceException.OperationFailed("server.jar installation failed")
@@ -179,12 +179,12 @@ object ServerService {
             Files.deleteIfExists(pidFile)
         }
 
-        Log.info("Starting Paper ${server.minecraftVersion} with ${server.memory} memory")
+        Log.info("Starting Paper ${server.packageInfo.version} with ${server.runtime.memory} memory")
 
         val command = listOf(
             "java",
-            "-Xms${server.memory}",
-            "-Xmx${server.memory}",
+            "-Xms${server.runtime.memory}",
+            "-Xmx${server.runtime.memory}",
             "-Dfile.encoding=UTF-8",
             "-jar",
             "server.jar",
@@ -287,7 +287,7 @@ object ServerService {
     }
 
     /**
-     * Changes [name]'s `[server].policy`. Exactly one of [pin]/[channel]/
+     * Changes [name]'s `[server.policy]`. Exactly one of [pin]/[channel]/
      * [track] is required; [track], if given, must be `"minor"` or
      * `"patch"`.
      */

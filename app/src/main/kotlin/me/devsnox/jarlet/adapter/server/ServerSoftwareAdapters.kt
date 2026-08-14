@@ -1,10 +1,10 @@
 package me.devsnox.jarlet.adapter.server
 
-/** Thrown when `[server].package` names a source with no registered adapter. */
+/** Thrown when `[server.package].name` names a source with no registered adapter. */
 class ServerSoftwareAdapterException(message: String) : Exception(message)
 
 /**
- * Static registry resolving `[server].package` to its adapter.
+ * Static registry resolving `[server.package].name` to its adapter.
  *
  * Paper is the only server-software source that exists today, so this
  * stays a plain `Map` built from a one-element list rather than a more
@@ -17,10 +17,10 @@ object ServerSoftwareAdapters {
     private val adapters: Map<String, ServerSoftwareAdapter> =
         listOf(PaperAdapter).associateBy { it.id }
 
-    /** Resolves the adapter for `[server].package` value [id], throwing if unknown. */
+    /** Resolves the adapter for `[server.package].name` value [id], throwing if unknown. */
     fun find(id: String): ServerSoftwareAdapter =
         adapters[id]
             ?: throw ServerSoftwareAdapterException(
-                "Unknown [server].package '$id'; no adapter is implemented for this package",
+                "Unknown [server.package].name '$id'; no adapter is implemented for this package",
             )
 }

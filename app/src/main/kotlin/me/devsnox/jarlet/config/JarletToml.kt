@@ -28,12 +28,20 @@ data class JarletToml(
     )
 
     data class Server(
-        val pkg: String,
-        val minecraftVersion: String,
+        val packageInfo: ServerPackage,
+        val policy: Policy = Policy(),
+        val runtime: ServerRuntime,
+    )
+
+    data class ServerPackage(
+        val name: String,
+        val version: String,
+    )
+
+    data class ServerRuntime(
         val memory: String,
         val port: Int,
         val onlineMode: Boolean,
-        val policy: Policy = Policy(),
     )
 
     /**
@@ -86,18 +94,26 @@ data class JarletToml(
                 description = templateTable.getString("description"),
             )
 
+            val packageTable = serverTable.getTable("package")
+                ?: throw IllegalArgumentException("$path is missing the [server.package] table")
+            val runtimeTable = serverTable.getTable("runtime")
+                ?: throw IllegalArgumentException("$path is missing the [server.runtime] table")
             val server = Server(
-                pkg = serverTable.getString("package")
-                    ?: throw IllegalArgumentException("$path is missing server.package"),
-                minecraftVersion = serverTable.getString("minecraft_version")
-                    ?: throw IllegalArgumentException("$path is missing server.minecraft_version"),
-                memory = serverTable.getString("memory")
-                    ?: throw IllegalArgumentException("$path is missing server.memory"),
-                port = serverTable.getLong("port")?.toInt()
-                    ?: throw IllegalArgumentException("$path is missing server.port"),
-                onlineMode = serverTable.getBoolean("online_mode")
-                    ?: throw IllegalArgumentException("$path is missing server.online_mode"),
+                packageInfo = ServerPackage(
+                    name = packageTable.getString("name")
+                        ?: throw IllegalArgumentException("$path is missing server.package.name"),
+                    version = packageTable.getString("version")
+                        ?: throw IllegalArgumentException("$path is missing server.package.version"),
+                ),
                 policy = serverTable.getTable("policy")?.toPolicy() ?: Policy(),
+                runtime = ServerRuntime(
+                    memory = runtimeTable.getString("memory")
+                        ?: throw IllegalArgumentException("$path is missing server.runtime.memory"),
+                    port = runtimeTable.getLong("port")?.toInt()
+                        ?: throw IllegalArgumentException("$path is missing server.runtime.port"),
+                    onlineMode = runtimeTable.getBoolean("online_mode")
+                        ?: throw IllegalArgumentException("$path is missing server.runtime.online_mode"),
+                ),
             )
 
             val pluginsArray = root.getArray("plugins")
@@ -153,15 +169,19 @@ fun JarletToml.write(path: Path) {
         template.description?.let { appendLine("description = ${tomlString(it)}") }
         appendLine()
 
-        appendLine("[server]")
-        appendLine("package = ${tomlString(server.pkg)}")
-        appendLine("minecraft_version = ${tomlString(server.minecraftVersion)}")
-        appendLine("memory = ${tomlString(server.memory)}")
-        appendLine("port = ${server.port}")
-        appendLine("online_mode = ${server.onlineMode}")
+        appendLine("[server.package]")
+        appendLine("name = ${tomlString(server.packageInfo.name)}")
+        appendLine("version = ${tomlString(server.packageInfo.version)}")
+        appendLine()
         if (server.policy != JarletToml.Policy()) {
-            appendLine("policy = ${server.policy.toInlineToml()}")
+            appendLine("[server.policy]")
+            server.policy.writeFields(this)
+            appendLine()
         }
+        appendLine("[server.runtime]")
+        appendLine("memory = ${tomlString(server.runtime.memory)}")
+        appendLine("port = ${server.runtime.port}")
+        appendLine("online_mode = ${server.runtime.onlineMode}")
 
         for (plugin in plugins) {
             appendLine()
@@ -202,4 +222,10 @@ private fun JarletToml.Policy.toInlineToml(): String {
         channel?.let { add("channel = ${tomlString(it)}") }
     }
     return "{ ${fields.joinToString(", ")} }"
+}
+
+private fun JarletToml.Policy.writeFields(builder: StringBuilder) {
+    pin?.let { builder.appendLine("pin = ${tomlString(it)}") }
+    track?.let { builder.appendLine("track = ${tomlString(it)}") }
+    channel?.let { builder.appendLine("channel = ${tomlString(it)}") }
 }

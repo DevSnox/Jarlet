@@ -10,7 +10,7 @@ import java.nio.file.Path
  * reflection-based, which matters for a GraalVM native-image build.
  */
 interface ServerSoftwareAdapter {
-    /** The `[server].package` value this adapter handles, e.g. `"paper"`. */
+    /** The `[server.package].name` value this adapter handles, e.g. `"paper"`. */
     val id: String
 
     /**
@@ -24,7 +24,7 @@ interface ServerSoftwareAdapter {
      * command layer, which is responsible for turning it into a
      * user-facing error.
      *
-     * [policy] is the `[server].policy` version-selection policy. Under
+     * [policy] is the `[server.policy]` version-selection policy. Under
      * `track = "minor"`/`"patch"`, [minecraftVersion] is a movable baseline
      * rather than a fixed target -- an implementation MAY resolve and
      * install a higher version within that bound (see [PaperAdapter]) and

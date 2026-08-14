@@ -31,7 +31,7 @@ class InstallCommandTest : CommandTestSupport() {
 
         assertEquals(1, result.statusCode)
         assertTrue(
-            result.stderr.contains("Unknown [server].package 'not-a-real-package'"),
+            result.stderr.contains("Unknown [server.package].name 'not-a-real-package'"),
             "got: ${result.stderr}",
         )
     }

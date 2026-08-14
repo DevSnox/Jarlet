@@ -58,6 +58,9 @@ jarlet plugin track <name> <identifier> [--pin <version> | --channel <name> | --
 
 jarlet track <name> [--pin <version> | --channel <name> | --track minor|patch]
                                             Change a server's update policy
+jarlet copy <source> <target> <selector>...  Copy selected packages or worlds
+jarlet copy-environment <source> <target> <selector>...
+                                            Copy matching instances between environments
 ```
 
 Run any command with `--help` for its full option list.
@@ -71,16 +74,18 @@ Each server instance has its own `jarlet.toml`, generated from a template on `se
 name = "my-server"
 description = "My Paper server"
 
-[server]
-package = "paper"
-minecraft_version = "26.2"
-memory = "2G"
-port = 25565
-online_mode = true
+[server.package]
+name = "paper"
+version = "26.2"
 
 [server.policy]
 channel = "Release"
 track = "channel"
+
+[server.runtime]
+memory = "2G"
+port = 25565
+online_mode = true
 
 [[plugins]]
 id = "WorldEdit"
@@ -91,7 +96,7 @@ channel = "Release"
 track = "channel"
 ```
 
-`policy` controls how updates are picked: `track = "channel"` follows a named release channel (`channel = "..."`), `track = "minor"`/`"patch"` stays within a semver bound, and `pin = "<exact version>"` locks to one version. `[server].policy` and each plugin's `[plugins.policy]` work the same way.
+`policy` controls how updates are picked: `track = "channel"` follows a named release channel (`channel = "..."`), `track = "minor"`/`"patch"` stays within a semver bound, and `pin = "<exact version>"` locks to one version. `[server.policy]` and each plugin's `[plugins.policy]` work the same way.
 
 Pass your own template file to start from something other than the default:
 
@@ -108,6 +113,19 @@ instances using selectors such as `data.world.*`, `package.plugin.*`, and
 rather than copying JARs or state files directly. Optional root-level `environments.toml` and `topology.toml` files
 describe environment metadata and desired proxy backends; runtime proxy
 registration is reconciled through the configured proxy provider.
+
+A topology definition can use global namespaced backend names or
+environment-local names:
+
+```toml
+[topology]
+proxy = "prod/proxy"
+scope = "environment"
+
+[[topology.backends]]
+instance = "prod/survival"
+address = "127.0.0.1:25566"
+```
 
 Resource selectors map to package declarations or existing Minecraft world
 directories. `data.world.<name>` replaces a positively validated world

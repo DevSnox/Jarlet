@@ -12,7 +12,7 @@ import me.devsnox.jarlet.service.PluginService
  * `jarlet plugin track <name> <identifier> [--pin <version> | --channel <name> | --track minor|patch]`
  * -- changes a single declared plugin's policy after the fact, the
  * plugin-scoped counterpart to [TrackCommand] (which does the same for a
- * server's own `[server].policy`). Validation and the toml rewrite are
+ * server's own `[server.policy]`). Validation and the toml rewrite are
  * [PluginService.track]'s job; this command is just a Clikt-to-service
  * translation plus rendering the returned [PluginService.PluginTrackResult].
  */

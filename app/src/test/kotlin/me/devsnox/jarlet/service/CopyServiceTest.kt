@@ -7,6 +7,10 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertTrue
 import me.devsnox.jarlet.config.JarletToml
+import me.devsnox.jarlet.config.InstalledServer
+import me.devsnox.jarlet.config.InstalledVersion
+import me.devsnox.jarlet.config.PluginStateStore
+import me.devsnox.jarlet.config.ServerStateStore
 import me.devsnox.jarlet.config.write
 import me.devsnox.jarlet.instance.InstanceRef
 import me.devsnox.jarlet.instance.PluginPackageResource
@@ -106,9 +110,9 @@ class CopyServiceTest {
             ),
         )
 
-        assertTrue(plan.targetToml.server.memory == "6G")
-        assertTrue(plan.targetToml.server.port == 25570)
-        assertTrue(plan.targetToml.server.pkg == "paper")
+        assertTrue(plan.targetToml.server.runtime.memory == "6G")
+        assertTrue(plan.targetToml.server.runtime.port == 25570)
+        assertTrue(plan.targetToml.server.packageInfo.name == "paper")
     }
 
     @Test
@@ -130,6 +134,57 @@ class CopyServiceTest {
         assertTrue(plan.targetToml.plugins.single().source == "hangar")
     }
 
+    @Test
+    fun `resolved pin mode copies installed package versions without copying state files`() {
+        val source = root.resolve("prod/survival")
+        val target = root.resolve("test/survival")
+        writeToml(source, listOf(JarletToml.Plugin("hangar", "LuckPerms")), memory = "2G", port = 25565)
+        writeToml(target, emptyList(), memory = "6G", port = 25570)
+        ServerStateStore.write(source, InstalledServer("paper", "1.21.4"))
+        PluginStateStore.write(
+            source,
+            InstalledVersion("hangar", "LuckPerms", "5.4.0", file = "LuckPerms.jar"),
+        )
+
+        val plan = CopyService.plan(
+            CopyRequest(
+                source = InstanceRef.parse("prod/survival"),
+                target = InstanceRef.parse("test/survival"),
+                selectors = setOf(ResourceSelector.ServerPackage, ResourceSelector.AllPluginPackages),
+                packageMode = PackageTransferMode.RESOLVED_PIN,
+            ),
+        )
+
+        assertTrue(plan.targetToml.server.packageInfo.version == "1.21.4")
+        assertTrue(plan.targetToml.server.policy.pin == "1.21.4")
+        assertTrue(plan.targetToml.server.runtime.memory == "6G")
+        assertTrue(plan.targetToml.server.runtime.port == 25570)
+        assertTrue(plan.targetToml.plugins.single().policy.pin == "5.4.0")
+        assertTrue(!Files.exists(target.resolve("plugins-state.json")))
+    }
+
+    @Test
+    fun `environment copy applies only to matching configured instances`() {
+        val source = root.resolve("prod/survival")
+        val target = root.resolve("test/survival")
+        val unmatched = root.resolve("prod/lobby")
+        writeToml(source, emptyList())
+        writeToml(target, emptyList())
+        writeToml(unmatched, emptyList())
+        Files.createDirectories(source.resolve("world"))
+        Files.writeString(source.resolve("world/level.dat"), "prod-world")
+
+        val result = CopyService.copyEnvironment(
+            sourceEnvironment = "prod",
+            targetEnvironment = "test",
+            selectors = setOf(ResourceSelector.World("world")),
+        )
+
+        assertTrue(result.instances.map { it.target.toString() } == listOf("test/survival"))
+        assertTrue(Files.readString(target.resolve("world/level.dat")) == "prod-world")
+        assertTrue(!Files.exists(root.resolve("test/lobby")))
+    }
+
     private fun writeToml(
         dir: Path,
         plugins: List<JarletToml.Plugin>,
@@ -139,7 +194,10 @@ class CopyServiceTest {
         Files.createDirectories(dir)
         JarletToml(
             template = JarletToml.Template("test"),
-            server = JarletToml.Server("paper", "1.21.1", memory, port, true),
+            server = JarletToml.Server(
+                packageInfo = JarletToml.ServerPackage("paper", "1.21.1"),
+                runtime = JarletToml.ServerRuntime(memory, port, true),
+            ),
             plugins = plugins,
         ).write(dir.resolve(ServerPaths.templateFilename()))
     }

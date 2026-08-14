@@ -12,7 +12,7 @@ import me.devsnox.jarlet.config.write
 /**
  * `jarlet setup <name> [template-file]` coverage restricted to paths that
  * never touch the network: argument/name validation, template
- * `[server].minecraft_version`/`.port`/`.package` validation, the
+ * `[server.package]`/`[server.runtime]` validation, the
  * "already exists" guard, and a missing template-file argument.
  *
  * NOT covered here (needs a real network call, already out of scope for
@@ -41,14 +41,14 @@ class SetupCommandTest : CommandTestSupport() {
     }
 
     @Test
-    fun `an invalid minecraft_version in the template is rejected and leaves no server directory behind`() {
+    fun `an invalid package version in the template is rejected and leaves no server directory behind`() {
         val templateFile = serversDir.resolve("template.toml")
         defaultToml(minecraftVersion = "not a version!").write(templateFile)
 
         val result = Jarlet().test(listOf("setup", "myserver", templateFile.toString()))
 
         assertEquals(1, result.statusCode)
-        assertTrue(result.stderr.contains("Invalid [server].minecraft_version"), "got: ${result.stderr}")
+        assertTrue(result.stderr.contains("Invalid [server.package].version"), "got: ${result.stderr}")
         assertFalse(Files.exists(serversDir.resolve("myserver")))
     }
 
@@ -60,7 +60,7 @@ class SetupCommandTest : CommandTestSupport() {
         val result = Jarlet().test(listOf("setup", "myserver", templateFile.toString()))
 
         assertEquals(1, result.statusCode)
-        assertTrue(result.stderr.contains("Invalid [server].port"), "got: ${result.stderr}")
+        assertTrue(result.stderr.contains("Invalid [server.runtime].port"), "got: ${result.stderr}")
         assertFalse(Files.exists(serversDir.resolve("myserver")))
     }
 
@@ -73,7 +73,7 @@ class SetupCommandTest : CommandTestSupport() {
 
         assertEquals(1, result.statusCode)
         assertTrue(
-            result.stderr.contains("Unknown [server].package 'not-a-real-package'"),
+            result.stderr.contains("Unknown [server.package].name 'not-a-real-package'"),
             "got: ${result.stderr}",
         )
         assertFalse(Files.exists(serversDir.resolve("myserver")))

@@ -10,7 +10,7 @@ import me.devsnox.jarlet.service.ServerService
 
 /**
  * `jarlet track <name> [--pin <version> | --channel <name> | --track minor|patch]`
- * -- changes a server's `[server].policy` after the fact.
+ * -- changes a server's `[server.policy]` after the fact.
  *
  * The top-level (server-scoped) counterpart to [PluginTrackCommand], which
  * does the same thing for a single declared plugin. Validation and the
