@@ -61,6 +61,11 @@ jarlet track <name> [--pin <version> | --channel <name> | --track minor|patch]
 jarlet copy <source> <target> <selector>...  Copy selected packages or worlds
 jarlet copy-environment <source> <target> <selector>...
                                             Copy matching instances between environments
+jarlet env create <name>                    Create an environment namespace
+jarlet env remove <name>                    Remove an empty environment namespace
+jarlet env use <name>                       Select the active environment
+jarlet env list                             List environment namespaces
+jarlet env current                          Show the active environment
 ```
 
 Run any command with `--help` for its full option list.
@@ -97,6 +102,18 @@ track = "channel"
 ```
 
 `policy` controls how updates are picked: `track = "channel"` follows a named release channel (`channel = "..."`), `track = "minor"`/`"patch"` stays within a semver bound, and `pin = "<exact version>"` locks to one version. `[server.policy]` and each plugin's `[plugins.policy]` work the same way.
+
+Manage environment namespaces with `jarlet env`. The active environment is
+stored in the root-level `environments.toml`; removing an environment never
+deletes instance files and is refused while configured instances remain:
+
+```bash
+jarlet env create prod
+jarlet env use prod
+jarlet env current
+jarlet env list
+jarlet env remove prod
+```
 
 Pass your own template file to start from something other than the default:
 

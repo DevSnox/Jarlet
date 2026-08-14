@@ -17,6 +17,7 @@ import me.devsnox.jarlet.config.SysConfig
 import me.devsnox.jarlet.command.PluginCommand
 import me.devsnox.jarlet.command.CopyCommand
 import me.devsnox.jarlet.command.CopyEnvironmentCommand
+import me.devsnox.jarlet.command.EnvironmentCommand
 import me.devsnox.jarlet.command.InstallCommand
 import me.devsnox.jarlet.command.SetupCommand
 import me.devsnox.jarlet.command.StartCommand
@@ -35,7 +36,7 @@ class Jarlet : CliktCommand(name = "jarlet") {
             names = setOf("--version", "-v"),
             message = { SelfUpdateChecker.versionMessage(it) },
         )
-        subcommands(CopyCommand(), CopyEnvironmentCommand(), InstallCommand(), SetupCommand(), StartCommand(), StopCommand(), TrackCommand(), PluginCommand())
+        subcommands(CopyCommand(), CopyEnvironmentCommand(), EnvironmentCommand(), InstallCommand(), SetupCommand(), StartCommand(), StopCommand(), TrackCommand(), PluginCommand())
 
         // Mordant's default Terminal() auto-detects the terminal width, which
         // resolves to 0 (or otherwise fails) under the GraalVM native-image
