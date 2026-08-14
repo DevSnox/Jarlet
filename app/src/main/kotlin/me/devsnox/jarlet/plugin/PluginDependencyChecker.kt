@@ -32,16 +32,34 @@ import me.devsnox.jarlet.io.PluginYamlReader
 object PluginDependencyChecker {
 
     /**
+     * The outcome of [checkAndResolve]: the (possibly updated) [toml],
+     * the hard/soft dependency names missing at the time of the check (a
+     * dependency named here may since have been resolved -- see
+     * [resolvedDependencies]), and which of the missing hard dependencies
+     * were actually resolved+declared+installed. Exposed as data (not just
+     * [Log] output) so a caller other than the CLI -- a planned MCP
+     * frontend, a possible REST API -- can act on it programmatically.
+     */
+    data class DependencyCheckOutcome(
+        val toml: JarletToml,
+        val missingHardDependencies: List<String>,
+        val missingSoftDependencies: List<String>,
+        val resolvedDependencies: List<PluginDeclarer.Declaration>,
+    )
+
+    /**
      * Checks the already-installed `source`/`id` plugin's `plugin.yml` for
      * dependencies, warns about anything missing from [toml], and (if
      * [resolveDependencies]) attempts to resolve+declare+install missing
      * hard dependencies, persisting each successful addition to
-     * [tomlFile] immediately. Returns the (possibly updated) [JarletToml]
-     * so callers processing multiple plugins in a loop can thread the
-     * growing declared-plugins list through subsequent calls.
+     * [tomlFile] immediately. Returns a [DependencyCheckOutcome] carrying
+     * the (possibly updated) [JarletToml] so callers processing multiple
+     * plugins in a loop can thread the growing declared-plugins list
+     * through subsequent calls.
      *
-     * A no-op (returns [toml] unchanged) if nothing was actually installed
-     * for `source`/`id` (no [me.devsnox.jarlet.config.PluginStateStore] entry, or the recorded jar
+     * A no-op (an outcome wrapping [toml] unchanged, with empty
+     * dependency lists) if nothing was actually installed for `source`/`id`
+     * (no [me.devsnox.jarlet.config.PluginStateStore] entry, or the recorded jar
      * is missing/not a readable `plugin.yml`) -- e.g. `route()` skipped an
      * unregistered source, or the fetch itself failed.
      */
@@ -54,9 +72,11 @@ object PluginDependencyChecker {
         id: String,
         resolveDependencies: Boolean,
         trustRequested: Boolean,
-    ): JarletToml {
-        val installed = PluginStateStore.read(serverDir, source, id) ?: return toml
-        val info = PluginYamlReader.read(pluginsDir.resolve(installed.file)) ?: return toml
+    ): DependencyCheckOutcome {
+        val installed = PluginStateStore.read(serverDir, source, id)
+            ?: return DependencyCheckOutcome(toml, emptyList(), emptyList(), emptyList())
+        val info = PluginYamlReader.read(pluginsDir.resolve(installed.file))
+            ?: return DependencyCheckOutcome(toml, emptyList(), emptyList(), emptyList())
 
         var currentToml = toml
         fun isDeclared(depName: String) = currentToml.plugins.any { it.id.equals(depName, ignoreCase = true) }
@@ -72,8 +92,9 @@ object PluginDependencyChecker {
             Log.info("""Note: optional dependency "$dep" of "$id" is not declared for this server; "$id" will still load, but functionality relying on "$dep" may be unavailable""")
         }
 
-        if (!resolveDependencies) return currentToml
+        if (!resolveDependencies) return DependencyCheckOutcome(currentToml, missingHard, missingSoft, emptyList())
 
+        val resolvedDependencies = mutableListOf<PluginDeclarer.Declaration>()
         for (dep in missingHard) {
             if (isDeclared(dep)) continue // may have been declared by an earlier iteration, e.g. two deps resolving to the same id
 
@@ -83,12 +104,13 @@ object PluginDependencyChecker {
                     serverDir, pluginsDir, tomlFile, currentToml, dep, null, policy, trustRequested,
                 )
                 currentToml = declaration.toml
+                resolvedDependencies += declaration
                 Log.info("""Declared "${declaration.id}" (${declaration.source}) in $tomlFile as a dependency of "$id"""")
             } catch (e: Exception) {
                 Log.info("""Failed to resolve/install dependency "$dep" of "$id": ${e.message}""")
             }
         }
 
-        return currentToml
+        return DependencyCheckOutcome(currentToml, missingHard, missingSoft, resolvedDependencies)
     }
 }

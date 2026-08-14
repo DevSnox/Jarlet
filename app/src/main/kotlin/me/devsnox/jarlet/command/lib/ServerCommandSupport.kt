@@ -2,15 +2,13 @@ package me.devsnox.jarlet.command.lib
 
 import com.github.ajalt.clikt.core.CliktError
 
-/** Thrown for user-facing server-command failures (validation, missing files, etc). */
-class ServerCommandException(message: String) : Exception(message)
-
 /**
- * Wraps a server-lifecycle command's body, translating [ServerCommandException]
- * -- and any other unexpected exception (config errors, adapter failures,
- * I/O) -- into a [CliktError] so Clikt prints a single `Error: <message>`
- * line to stderr and exits non-zero, applied once at the command boundary
- * rather than call-by-call.
+ * Wraps a server-lifecycle command's body, translating
+ * [me.devsnox.jarlet.service.JarletServiceException] -- and any other
+ * unexpected exception (config errors, adapter failures, I/O) -- into a
+ * [CliktError] so Clikt prints a single `Error: <message>` line to stderr
+ * and exits non-zero, applied once at the command boundary rather than
+ * call-by-call.
  */
 internal fun serverCommandBody(block: () -> Unit) {
     try {

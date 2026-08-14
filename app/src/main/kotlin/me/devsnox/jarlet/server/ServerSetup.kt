@@ -2,10 +2,10 @@ package me.devsnox.jarlet.server
 
 import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.adapter.server.ServerSoftwareAdapters
-import me.devsnox.jarlet.command.lib.ServerCommandException
 import me.devsnox.jarlet.config.InstalledServer
 import me.devsnox.jarlet.config.JarletToml
 import me.devsnox.jarlet.config.ServerStateStore
+import me.devsnox.jarlet.service.JarletServiceException
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -13,9 +13,9 @@ import java.nio.file.Paths
 
 /**
  * Core "materialize a server instance directory from a template" logic,
- * factored out of [me.devsnox.jarlet.command.SetupCommand] so
- * [me.devsnox.jarlet.command.StartCommand] can call it directly for its
- * auto-setup-if-missing fallback.
+ * factored out of [me.devsnox.jarlet.service.ServerService.setup] (called
+ * for `jarlet setup`) so [me.devsnox.jarlet.service.ServerService.prepareStart]
+ * can call it directly for its own auto-setup-if-missing fallback.
  */
 internal object ServerSetup {
     private val VALID_VERSION = Regex("^[0-9A-Za-z._-]+$")
@@ -38,17 +38,17 @@ internal object ServerSetup {
 
         val serverDir = ServerPaths.serverDir(name)
         if (Files.exists(serverDir)) {
-            throw ServerCommandException("A server named '$name' already exists at $serverDir")
+            throw JarletServiceException.Conflict("A server named '$name' already exists at $serverDir")
         }
 
         val toml = readToml(configPath)
         val server = toml.server
 
         if (!VALID_VERSION.matches(server.minecraftVersion)) {
-            throw ServerCommandException("Invalid [server].minecraft_version")
+            throw JarletServiceException.InvalidInput("Invalid [server].minecraft_version")
         }
         if (server.port !in 1..65535) {
-            throw ServerCommandException("Invalid [server].port")
+            throw JarletServiceException.InvalidInput("Invalid [server].port")
         }
 
         // Resolves (and thereby validates) the package before touching the
@@ -107,16 +107,16 @@ internal object ServerSetup {
         return Result(serverDir, toml)
     }
 
-    /** Reads a `jarlet.toml`-shaped file at [path], wrapping I/O and parse failures into a [ServerCommandException]. */
+    /** Reads a `jarlet.toml`-shaped file at [path], wrapping I/O and parse failures into a [me.devsnox.jarlet.service.JarletServiceException]. */
     fun readToml(path: Path): JarletToml =
         try {
             JarletToml.read(path)
         } catch (exception: IOException) {
-            throw ServerCommandException(
-                "Could not read $path: ${exception.message}"
+            throw JarletServiceException.OperationFailed(
+                "Could not read $path: ${exception.message}", exception,
             )
         } catch (exception: Exception) {
-            throw ServerCommandException(
+            throw JarletServiceException.InvalidInput(
                 "Could not parse $path as TOML: ${exception.message}"
             )
         }
@@ -133,7 +133,7 @@ internal object ServerSetup {
         if (templateFileArgument != null) {
             val explicit = resolvePath(templateFileArgument)
             if (!Files.isRegularFile(explicit)) {
-                throw ServerCommandException("$explicit does not exist")
+                throw JarletServiceException.NotFound("$explicit does not exist")
             }
             return explicit
         }
@@ -152,7 +152,7 @@ internal object ServerSetup {
     private fun extractBundledDefaultTemplate(templateName: String): Path {
         val resourcePath = "/$templateName"
         val bytes = ServerSetup::class.java.getResourceAsStream(resourcePath)?.readBytes()
-            ?: throw ServerCommandException("Bundled default template resource $resourcePath is missing")
+            ?: throw JarletServiceException.OperationFailed("Bundled default template resource $resourcePath is missing")
 
         val tempFile = Files.createTempFile("jarlet-default-template-", ".toml")
         tempFile.toFile().deleteOnExit()
@@ -168,7 +168,7 @@ internal object ServerSetup {
         val resolved = requested.toAbsolutePath().normalize()
         val parent = resolved.parent
         if (parent == null || !Files.isDirectory(parent)) {
-            throw ServerCommandException("Directory does not exist: ${requested.toAbsolutePath().parent ?: Paths.get(".")}")
+            throw JarletServiceException.NotFound("Directory does not exist: ${requested.toAbsolutePath().parent ?: Paths.get(".")}")
         }
         return resolved
     }

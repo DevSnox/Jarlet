@@ -8,24 +8,20 @@ import com.github.ajalt.clikt.parameters.arguments.optional
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import me.devsnox.jarlet.Log
-import me.devsnox.jarlet.adapter.server.ServerSoftwareAdapters
-import me.devsnox.jarlet.command.lib.ServerCommandException
 import me.devsnox.jarlet.command.lib.serverCommandBody
-import me.devsnox.jarlet.config.InstalledServer
-import me.devsnox.jarlet.config.ServerStateStore
-import me.devsnox.jarlet.config.SysConfig
-import me.devsnox.jarlet.plugin.PluginDependencyChecker
-import me.devsnox.jarlet.plugin.PluginRouter
-import me.devsnox.jarlet.server.ServerPaths
-import me.devsnox.jarlet.server.ServerSetup
-import java.io.File
-import java.nio.file.Files
+import me.devsnox.jarlet.service.JarletServiceException
+import me.devsnox.jarlet.service.ServerService
 
 /**
  * `jarlet start <name> [template-file] [--foreground] [--accept-eula]`
  *
- * Sets the instance up first (via [me.devsnox.jarlet.server.ServerSetup.ensure]) if it doesn't
- * already exist. Foreground mode runs the JVM child process to completion
+ * [ServerService.prepareStart] does everything both modes share (auto-setup,
+ * validation, the EULA gate, installing/reinstalling the jar, routing
+ * plugins, the already-running guard) and hands back the launch command.
+ * From there this command owns process handling directly, since it differs
+ * completely by mode and (for `--foreground`) is inherently about *this*
+ * process's own stdio/exit code -- not something [ServerService] has an
+ * equivalent of. Foreground mode runs the JVM child process to completion
  * and exits this process with the same status code -- the JVM has no true
  * process-image-replace primitive, so this is the closest equivalent to
  * exec-ing straight into the server process.
@@ -39,145 +35,31 @@ class StartCommand : JarletCommand(name = "start") {
     private val acceptEula: Boolean by option("--accept-eula").flag()
 
     override fun run() = serverCommandBody {
-        ServerPaths.validateName(name)
-
-        val templateName = ServerPaths.templateFilename()
-        val serverDir = ServerPaths.serverDir(name)
-        val config = serverDir.resolve(templateName)
-
-        if (!Files.isRegularFile(config)) {
-            ServerSetup.ensure(name, templateFile)
-        }
-
-        val toml = ServerSetup.readToml(config)
-        val server = toml.server
-
-        if (!MEMORY_PATTERN.matches(server.memory)) {
-            throw ServerCommandException("[server].memory must look like 2G or 2048M")
-        }
-        if (!VERSION_PATTERN.matches(server.minecraftVersion)) {
-            throw ServerCommandException("Invalid [server].minecraft_version")
-        }
-
-        val adapter = ServerSoftwareAdapters.find(server.pkg)
-
-        val eulaFile = serverDir.resolve("eula.txt")
-        val eulaAccepted = Files.isRegularFile(eulaFile) &&
-                Files.readAllLines(eulaFile).any { it == "eula=true" }
-        if (!eulaAccepted) {
-            if (!acceptEula) {
-                throw ServerCommandException(
-                    "Run jarlet start $name --accept-eula after reading https://aka.ms/MinecraftEULA",
-                )
-            }
-            Files.createDirectories(serverDir)
-            Files.writeString(eulaFile, "eula=true\n")
-        }
-
-        val serverJar = serverDir.resolve("server.jar")
-        val installedServer = ServerStateStore.read(serverDir)
-        val serverDrifted = installedServer == null ||
-                installedServer.pkg != server.pkg ||
-                installedServer.minecraftVersion != server.minecraftVersion
-        val jarMissing = !Files.isRegularFile(serverJar)
-
-        if (jarMissing || serverDrifted) {
-            if (!jarMissing && serverDrifted) {
-                Log.info("jarlet.toml no longer matches the installed server.jar (was ${installedServer?.pkg} ${installedServer?.minecraftVersion}); reinstalling")
-            }
-            val installedVersion = adapter.install(server.minecraftVersion, serverJar, server.policy)
-            ServerStateStore.write(serverDir, InstalledServer(pkg = server.pkg, minecraftVersion = installedVersion))
-        }
-        if (!Files.isRegularFile(serverJar)) {
-            throw ServerCommandException("server.jar installation failed")
-        }
-
-        val pluginsDir = serverDir.resolve("plugins")
-        Files.createDirectories(pluginsDir)
-        PluginRouter.routeAll(serverDir, pluginsDir, toml.plugins, trustRequested = false)
-        var currentToml = toml
-        for (entry in toml.plugins) {
-            try {
-                currentToml = PluginDependencyChecker.checkAndResolve(
-                    serverDir, pluginsDir, config, currentToml, entry.source, entry.id,
-                    resolveDependencies = false, trustRequested = false,
-                )
-            } catch (e: Exception) {
-                Log.info("""Failed to check/resolve dependencies for "${entry.id}" (${entry.source}): ${e.message}, continuing""")
-            }
-        }
-
-        val jarletDir = serverDir.resolve(".jarlet")
-        Files.createDirectories(jarletDir)
-        val pidFile = jarletDir.resolve("server.pid")
-
-        if (Files.isRegularFile(pidFile)) {
-            val existingPid = Files.readString(pidFile).trim().toLongOrNull()
-            if (existingPid != null && ProcessHandle.of(existingPid).map { it.isAlive }.orElse(false)) {
-                throw ServerCommandException("Server is already running with PID $existingPid")
-            }
-            Files.deleteIfExists(pidFile)
-        }
-
-        Log.info("Starting Paper ${server.minecraftVersion} with ${server.memory} memory")
-
-        val command = listOf(
-            "java",
-            "-Xms${server.memory}",
-            "-Xmx${server.memory}",
-            "-Dfile.encoding=UTF-8",
-            "-jar",
-            "server.jar",
-            "nogui",
-        )
+        val preparation = ServerService.prepareStart(name, templateFile, acceptEula)
 
         if (foreground) {
-            val process = ProcessBuilder(command)
-                .directory(serverDir.toFile())
+            val process = ProcessBuilder(preparation.command)
+                .directory(preparation.serverDir.toFile())
                 .inheritIO()
                 .start()
             throw ProgramResult(process.waitFor())
         }
 
-        val process = ProcessBuilder(command)
-            .directory(serverDir.toFile())
-            .redirectInput(File("/dev/null"))
-            .redirectOutput(File("/dev/null"))
-            .redirectErrorStream(true)
-            .start()
-
-        val serverPid = process.pid()
-        Files.writeString(pidFile, "$serverPid\n")
-
-        val startupCheckDelaySeconds = SysConfig.default().value("STARTUP_CHECK_DELAY_SECONDS").toLongOrNull()
-            ?.takeIf { it >= 0 }
-            ?: throw ServerCommandException("STARTUP_CHECK_DELAY_SECONDS must be a non-negative integer")
-
-        Thread.sleep(startupCheckDelaySeconds * 1000)
-
-        if (!process.isAlive) {
-            Files.deleteIfExists(pidFile)
-
-            val logFile = serverDir.resolve("logs/latest.log")
-            if (Files.isRegularFile(logFile)) {
+        when (val outcome = ServerService.startBackground(preparation)) {
+            is ServerService.ServerBackgroundStartOutcome.Started -> {
+                Log.info("Server \"$name\" started with PID ${outcome.result.pid}")
+                Log.info("Logs: ${outcome.result.logFile}")
+            }
+            is ServerService.ServerBackgroundStartOutcome.Failed -> {
                 // Left as a direct CliktCommand.echo(..., err = true), not
                 // Log -- these are raw lines tailed from the crashed
                 // server's own log file, not a Jarlet-authored message, so
                 // none of Log's functions (each either silent by default or
                 // prefix-adding) is a faithful fit without changing this
                 // output's actual content.
-                Files.readAllLines(logFile).takeLast(30).forEach { echo(it, err = true) }
+                outcome.failure.crashLogTail?.forEach { echo(it, err = true) }
+                throw JarletServiceException.OperationFailed("Paper stopped during startup")
             }
-
-            throw ServerCommandException("Paper stopped during startup")
         }
-
-        Log.info("Server \"$name\" started with PID $serverPid")
-        Log.info("Logs: ${serverDir.resolve("logs/latest.log")}")
-    }
-
-    private companion object {
-        val MEMORY_PATTERN = Regex("^[1-9][0-9]*[MG]$")
-        val VERSION_PATTERN = Regex("^[0-9A-Za-z._-]+$")
     }
 }

@@ -6,13 +6,8 @@ import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import me.devsnox.jarlet.Log
-import me.devsnox.jarlet.command.lib.resolvePluginCommandContext
-import java.nio.file.Files
-import me.devsnox.jarlet.config.JarletToml
-import me.devsnox.jarlet.command.lib.ServerCommandException
 import me.devsnox.jarlet.command.lib.serverCommandBody
-import me.devsnox.jarlet.plugin.PluginDeclarer
-import me.devsnox.jarlet.plugin.PluginDependencyChecker
+import me.devsnox.jarlet.service.PluginService
 
 /**
  * `jarlet plugin add <name> <identifier> [--pin <version> | --channel <name>] [--source <hangar|spiget|github>] [--trust]`
@@ -24,16 +19,9 @@ import me.devsnox.jarlet.plugin.PluginDependencyChecker
  * hatch that skips inference entirely (still validated via
  * [me.devsnox.jarlet.plugin.SourceResolver.validateSourceIdShape]).
  *
- * Declares a new `[[plugins]]` entry in `jarlet.toml` (a full rewrite -- see
- * [JarletToml]'s write docs) and only *then* routes it to actually fetch
- * it: a failed fetch still leaves the plugin declared in `jarlet.toml`. The
- * resolve/declare/write/route sequence itself is shared with
- * [PluginDependencyChecker] via [PluginDeclarer.declareAndRoute].
- *
- * Wired end-to-end against [me.devsnox.jarlet.plugin.SourceResolver],
- * [JarletToml], and [PluginDeclarer.declareAndRoute] using
- * [me.devsnox.jarlet.plugin.AdapterRegistry]'s three registered adapters
- * (hangar, github, spiget).
+ * All validation, declaring, and fetching is [PluginService.add]'s job;
+ * this command is just a Clikt-to-service translation plus rendering the
+ * returned [PluginService.PluginAddResult].
  */
 class AddCommand : JarletCommand(name = "add") {
 
@@ -59,30 +47,7 @@ class AddCommand : JarletCommand(name = "add") {
     ).flag(default = false)
 
     override fun run() = serverCommandBody {
-        if (pin != null && channel != null) {
-            throw ServerCommandException("--pin and --channel are mutually exclusive")
-        }
-
-        val (serverDir, tomlFile, toml) = resolvePluginCommandContext(name)
-
-        val pluginsDir = serverDir.resolve("plugins")
-        Files.createDirectories(pluginsDir)
-
-        // With neither --pin nor --channel given, default to tracking the
-        // "Release" channel.
-        val policy = if (pin != null) {
-            JarletToml.Policy(pin = pin)
-        } else {
-            JarletToml.Policy(track = "channel", channel = channel ?: "Release")
-        }
-
-        val declaration = PluginDeclarer.declareAndRoute(
-            serverDir, pluginsDir, tomlFile, toml, identifier, sourceOverride, policy, trust,
-        )
-        Log.info("""Declared "${declaration.id}" (${declaration.source}) in $tomlFile""")
-
-        PluginDependencyChecker.checkAndResolve(
-            serverDir, pluginsDir, tomlFile, declaration.toml, declaration.source, declaration.id, resolveDependencies, trust,
-        )
+        val result = PluginService.add(name, identifier, pin, channel, sourceOverride, trust, resolveDependencies)
+        Log.info("""Declared "${result.id}" (${result.source}) in ${result.tomlFile}""")
     }
 }

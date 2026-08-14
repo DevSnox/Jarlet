@@ -1,7 +1,7 @@
 package me.devsnox.jarlet.server
 
-import me.devsnox.jarlet.command.lib.ServerCommandException
 import me.devsnox.jarlet.config.SysConfig
+import me.devsnox.jarlet.service.JarletServiceException
 import java.nio.file.Path
 import java.nio.file.Paths
 
@@ -25,7 +25,7 @@ object ServerPaths {
     /** Validates a server instance name. */
     fun validateName(name: String): String {
         if (!VALID_NAME.matches(name)) {
-            throw ServerCommandException("Server name must be a simple name (letters, digits, _-)")
+            throw JarletServiceException.InvalidInput("Server name must be a simple name (letters, digits, _-)")
         }
         return name
     }
@@ -36,7 +36,7 @@ object ServerPaths {
         if (!override.isNullOrEmpty()) {
             val path = Paths.get(override)
             if (!path.isAbsolute) {
-                throw ServerCommandException("JARLET_SERVERS_DIR must be an absolute path")
+                throw JarletServiceException.InvalidInput("JARLET_SERVERS_DIR must be an absolute path")
             }
             return path
         }

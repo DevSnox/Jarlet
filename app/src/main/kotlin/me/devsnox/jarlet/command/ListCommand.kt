@@ -11,27 +11,15 @@ import com.github.ajalt.clikt.parameters.types.int
 import com.github.ajalt.mordant.table.ColumnWidth
 import com.github.ajalt.mordant.table.table
 import me.devsnox.jarlet.Log
-import me.devsnox.jarlet.command.lib.ServerCommandException
-import me.devsnox.jarlet.command.lib.resolvePluginCommandContext
 import me.devsnox.jarlet.command.lib.serverCommandBody
-import me.devsnox.jarlet.config.JarletToml
-import me.devsnox.jarlet.config.SysConfig
-import me.devsnox.jarlet.plugin.AdapterRegistry
-import me.devsnox.jarlet.config.PluginStateStore
+import me.devsnox.jarlet.service.PluginService
 
 /**
  * `jarlet plugin list <name> [--page <n> | --all]`
  *
- * Combines the DECLARED `[[plugins]]` entries from a server's
- * `jarlet.toml` ([JarletToml.plugins]) with the INSTALLED state recorded
- * in `plugins-state.json` ([PluginStateStore.readAll]) into one merged,
- * paginated view, rendered as a Mordant table.
- *
- * This command resolves its own server paths directly (via
- * [ServerPaths], shared with the server-lifecycle commands) -- see
- * [PluginCommand]'s header for why each subcommand (this one, and
- * `add`/`remove`/`update`) does its own resolution instead of sharing
- * state through a common dispatcher.
+ * Renders the merged declared/installed, paginated view
+ * [PluginService.list] builds as a Mordant table -- this command does
+ * nothing but call that and render its [PluginService.PluginListResult].
  */
 class ListCommand : JarletCommand(name = "list") {
 
@@ -47,70 +35,11 @@ class ListCommand : JarletCommand(name = "list") {
         .flag(default = false)
 
     override fun run() = serverCommandBody {
-        if (page < 1) {
-            throw ServerCommandException("--page must be a positive integer")
-        }
+        val result = PluginService.list(name, page, all)
 
-        val (serverDir, _, toml) = resolvePluginCommandContext(name)
-        val declared = toml.plugins
-
-        val installed = PluginStateStore.readAll(serverDir)
-
-        val merged = declared
-            .map { d ->
-                // Case-insensitive id match: declared and installed-state
-                // ids should normally share the exact same casing (both
-                // come from the same adapter-resolved id at declare
-                // time), but matching loosely here avoids silently
-                // showing a plugin as "not installed" if that ever drifts.
-                val i = installed.firstOrNull { it.source == d.source && it.id.equals(d.id, ignoreCase = true) }
-                // Spiget's declared id is a bare numeric resource id (unlike
-                // Hangar/GitHub, whose id is already a readable
-                // slug/name) -- once the plugin has actually been
-                // installed/updated at least once, SpigetAdapter caches the
-                // real resource name in the installed-state record
-                // (i.displayName). Prefer that, keeping the id alongside for
-                // disambiguation/scripting, same as e.g. github's
-                // "owner/repo" id already provides. Declared-but-never-
-                // installed Spiget plugins have no state record yet, so
-                // they still fall back to the bare id here -- expected, not
-                // a bug (see PluginStateStore.InstalledVersion.displayName).
-                val idDisplay = i?.displayName?.let { "$it (${d.id})" } ?: d.id
-                MergedRow(
-                    id = idDisplay,
-                    sortId = d.id,
-                    source = d.source,
-                    sourceDisplay = AdapterRegistry.displayName(d.source),
-                    versionName = i?.versionName,
-                    policyDisplay = policyDisplay(d.policy),
-                )
-            }
-            // Sorted by the raw declared id (not the display string above)
-            // so caching a Spiget name doesn't reshuffle row order versus
-            // today's behavior.
-            .sortedWith(compareBy({ it.source }, { it.sortId }))
-
-        if (merged.isEmpty()) {
+        if (result.rows.isEmpty()) {
             Log.info("No plugins declared")
             return@serverCommandBody
-        }
-
-        val pageSize = SysConfig.default().value("PLUGIN_LIST_PAGE_SIZE").toIntOrNull()?.takeIf { it >= 1 }
-            ?: throw ServerCommandException("PLUGIN_LIST_PAGE_SIZE in jarlet-sys.conf must be a positive integer")
-
-        val count = merged.size
-
-        // --all wins and bypasses pagination entirely, regardless of
-        // whether --page was also given.
-        val (start, end, totalPages) = if (all) {
-            Triple(0, count, 1)
-        } else {
-            val computedTotalPages = (count + pageSize - 1) / pageSize
-            if (page > computedTotalPages) {
-                throw ServerCommandException("Page $page does not exist (there are $computedTotalPages page(s))")
-            }
-            val computedStart = (page - 1) * pageSize
-            Triple(computedStart, minOf(computedStart + pageSize, count), computedTotalPages)
         }
 
         val rendered = table {
@@ -128,35 +57,19 @@ class ListCommand : JarletCommand(name = "list") {
                 row("ID", "Source", "Version", "Policy")
             }
             body {
-                for (row in merged.subList(start, end)) {
+                for (row in result.rows) {
                     row(row.id, row.sourceDisplay, row.versionName ?: "not installed", row.policyDisplay)
                 }
             }
         }
         terminal.println(rendered)
 
-        if (!all) {
+        if (!result.all) {
             val footer = buildString {
-                append("Page $page of $totalPages ($count plugin(s) total)")
-                if (page < totalPages) append(" -- use --page ${page + 1} for more")
+                append("Page ${result.page} of ${result.totalPages} (${result.count} plugin(s) total)")
+                if (result.page < result.totalPages) append(" -- use --page ${result.page + 1} for more")
             }
             Log.info(footer)
         }
-    }
-
-    private data class MergedRow(
-        val id: String,
-        val sortId: String,
-        val source: String,
-        val sourceDisplay: String,
-        val versionName: String?,
-        val policyDisplay: String,
-    )
-
-    private fun policyDisplay(policy: JarletToml.Policy): String = when {
-        policy.pin != null -> "pin: ${policy.pin}"
-        policy.channel != null -> "channel: ${policy.channel}"
-        policy.track == "minor" || policy.track == "patch" -> "track: ${policy.track}"
-        else -> "-"
     }
 }

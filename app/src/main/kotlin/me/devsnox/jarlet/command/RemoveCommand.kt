@@ -4,30 +4,14 @@ import me.devsnox.jarlet.command.lib.JarletCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.parameters.arguments.argument
 import me.devsnox.jarlet.Log
-import me.devsnox.jarlet.command.lib.resolvePluginCommandContext
 import me.devsnox.jarlet.command.lib.serverCommandBody
-import java.nio.file.Files
-import me.devsnox.jarlet.config.JarletToml
-import me.devsnox.jarlet.config.write
-import me.devsnox.jarlet.config.PluginStateStore
-import me.devsnox.jarlet.plugin.SourceResolver
+import me.devsnox.jarlet.service.PluginService
 
 /**
  * `jarlet plugin remove <name> <identifier>` -- undeclares a plugin and
- * deletes its installed jar.
- *
- * `identifier` is resolved against the currently declared `[[plugins]]`
- * entries by id alone, via [me.devsnox.jarlet.plugin.SourceResolver.resolveDeclaredIdentifier]
- * -- ids are globally unique per server (enforced at declare time by
- * [me.devsnox.jarlet.plugin.SourceResolver.checkIdAvailable]), so no
- * separate `source` argument is needed.
- *
- * A full uninstall: drops the `[[plugins]]` entry from `jarlet.toml` (a
- * full rewrite -- see [JarletToml]'s write docs), deletes the installed jar
- * from `plugins/` if [PluginStateStore] has one on record, and clears the
- * `plugins-state.json` entry via [PluginStateStore.remove] -- in that
- * order, so a failure partway through leaves a predictable partial state
- * rather than an inconsistent one.
+ * deletes its installed jar. The actual uninstall sequence is
+ * [PluginService.remove]'s job; this command is just a Clikt-to-service
+ * translation plus rendering the returned [PluginService.PluginRemoveResult].
  */
 class RemoveCommand : JarletCommand(name = "remove") {
 
@@ -37,31 +21,8 @@ class RemoveCommand : JarletCommand(name = "remove") {
     private val identifier by argument(name = "identifier", help = "The plugin's declared id.")
 
     override fun run() = serverCommandBody {
-        val (serverDir, tomlFile, toml) = resolvePluginCommandContext(name)
-
-        val pluginsDir = serverDir.resolve("plugins")
-        Files.createDirectories(pluginsDir)
-
-        val resolved = SourceResolver.resolveDeclaredIdentifier(toml, identifier, "remove")
-        val source = resolved.source
-        val id = resolved.id
-
-        val updatedToml = toml.copy(plugins = toml.plugins.filterNot { it.source == source && it.id == id })
-
-        Log.info("Note: this rewrites $tomlFile in full; hand-written comments and formatting are not preserved.")
-        updatedToml.write(tomlFile)
-
-        val installed = PluginStateStore.read(serverDir, source, id)
-        if (installed != null) {
-            val jarFile = pluginsDir.resolve(installed.file)
-            if (Files.isRegularFile(jarFile)) {
-                Files.delete(jarFile)
-                Log.info("Deleted $jarFile")
-            }
-        }
-
-        PluginStateStore.remove(serverDir, source, id)
-
-        Log.info("""Removed "$id" ($source) from $tomlFile""")
+        val result = PluginService.remove(name, identifier)
+        result.deletedJarFile?.let { Log.info("Deleted $it") }
+        Log.info("""Removed "${result.id}" (${result.source}) from ${result.tomlFile}""")
     }
 }
