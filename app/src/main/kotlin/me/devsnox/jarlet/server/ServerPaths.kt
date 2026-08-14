@@ -1,14 +1,14 @@
 package me.devsnox.jarlet.server
 
 import me.devsnox.jarlet.config.SysConfig
+import me.devsnox.jarlet.instance.InstanceRef
+import me.devsnox.jarlet.instance.InstanceResolver
 import me.devsnox.jarlet.service.JarletServiceException
 import java.nio.file.Path
 import java.nio.file.Paths
 
-/** Shared server-instance name/path helpers every server lifecycle command needs. */
+/** Compatibility facade for lifecycle commands; identity/layout live in [InstanceRef]/[InstanceResolver]. */
 object ServerPaths {
-    private val VALID_NAME = Regex("^[0-9A-Za-z_-]+$")
-
     /**
      * JVM-system-property override for [serversRoot], checked before the
      * `JARLET_SERVERS_DIR` env var. Real users/scripts have no reason to
@@ -22,11 +22,9 @@ object ServerPaths {
      */
     internal const val SERVERS_DIR_PROPERTY = "jarlet.serversDir"
 
-    /** Validates a server instance name. */
+    /** Validates a plain instance name or an `environment/name` reference. */
     fun validateName(name: String): String {
-        if (!VALID_NAME.matches(name)) {
-            throw JarletServiceException.InvalidInput("Server name must be a simple name (letters, digits, _-)")
-        }
+        InstanceRef.parse(name)
         return name
     }
 
@@ -46,8 +44,8 @@ object ServerPaths {
         return Paths.get(expanded)
     }
 
-    /** The instance directory for a validated server [name] under [serversRoot]. */
-    fun serverDir(name: String): Path = serversRoot().resolve(validateName(name))
+    /** Resolves a plain or namespaced instance under [serversRoot]. */
+    fun serverDir(name: String): Path = InstanceResolver(serversRoot()).directory(InstanceRef.parse(validateName(name)))
 
     /** The standard per-server template/instance filename (`jarlet.toml`). */
     fun templateFilename(): String = SysConfig.default().value("TEMPLATE_FILENAME")
