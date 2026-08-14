@@ -133,10 +133,11 @@ object SelfUpdateChecker {
      * check).
      */
     fun versionMessage(version: String): String {
-        if (!System.getenv("JARLET_NO_UPDATE_CHECK").isNullOrEmpty()) return version
+        val display = "jarlet version $version"
+        if (!System.getenv("JARLET_NO_UPDATE_CHECK").isNullOrEmpty()) return display
 
         val intervalMinutes = SysConfig.default().value("SELF_UPDATE_CHECK_INTERVAL_MINUTES").toLongOrNull()
-            ?: return version
+            ?: return display
         val path = stateFile()
         val now = System.currentTimeMillis()
 
@@ -147,6 +148,6 @@ object SelfUpdateChecker {
             fetchAndEvaluate().also { writeState(path, now, it) }
         }
 
-        return if (notice != null) "$version\n$notice" else version
+        return if (notice != null) "$display\n$notice" else display
     }
 }
