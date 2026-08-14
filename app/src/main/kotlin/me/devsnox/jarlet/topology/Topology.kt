@@ -8,7 +8,13 @@ enum class TopologyScope { GLOBAL, ENVIRONMENT }
 data class BackendRef(
     val instance: InstanceRef,
     val address: String,
-)
+) {
+    init {
+        if (address.isBlank() || address.any(Char::isWhitespace)) {
+            throw JarletServiceException.InvalidInput("Backend address must be a non-whitespace value")
+        }
+    }
+}
 
 /** Desired network topology; intentionally independent of process state. */
 data class Topology(

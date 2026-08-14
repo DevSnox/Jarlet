@@ -28,10 +28,11 @@ object TopologyStore {
             "environment", "environment-local" -> TopologyScope.ENVIRONMENT
             else -> throw JarletServiceException.InvalidInput("$file has an invalid topology.scope")
         }
-        val backends = table.getArray("backends")?.let { array ->
+        val backends = (table.get("backends") as? org.tomlj.TomlArray)?.let { array ->
             buildSet {
                 for (index in 0 until array.size()) {
-                    val backend = array.getTable(index)
+                    val backend = (array.get(index) as? org.tomlj.TomlTable)
+                        ?: throw JarletServiceException.InvalidInput("$file has an invalid backend entry")
                     val instance = backend.getString("instance")?.let(InstanceRef::parse)
                         ?: throw JarletServiceException.InvalidInput("$file has a backend missing instance")
                     val address = backend.getString("address")
