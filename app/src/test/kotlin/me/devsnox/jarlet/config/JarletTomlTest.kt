@@ -6,18 +6,15 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/** Covers [JarletToml.read]/[write] round-tripping for the `[server].policy` field specifically. */
+/** Covers [JarletToml.read]/[write] round-tripping for the separated server fields. */
 class JarletTomlTest {
 
     private fun baseToml(policy: JarletToml.Policy = JarletToml.Policy()) = JarletToml(
         template = JarletToml.Template(name = "test-template", description = "A hand-crafted test template"),
         server = JarletToml.Server(
-            pkg = "paper",
-            minecraftVersion = "1.21.1",
-            memory = "2G",
-            port = 25565,
-            onlineMode = true,
+            packageInfo = JarletToml.ServerPackage("paper", "1.21.1"),
             policy = policy,
+            runtime = JarletToml.ServerRuntime("2G", 25565, true),
         ),
     )
 
@@ -28,7 +25,8 @@ class JarletTomlTest {
         try {
             toml.write(file)
             val text = Files.readString(file)
-            assertTrue(text.contains("policy = { track = \"channel\", channel = \"Release\" }"))
+            assertTrue(text.contains("[server.policy]"))
+            assertTrue(text.contains("track = \"channel\""))
 
             val reread = JarletToml.read(file)
             assertEquals(toml.server.policy, reread.server.policy)
@@ -44,7 +42,7 @@ class JarletTomlTest {
         try {
             toml.write(file)
             val text = Files.readString(file)
-            assertFalse(text.contains("policy"))
+            assertFalse(text.contains("[server.policy]"))
 
             val reread = JarletToml.read(file)
             assertEquals(JarletToml.Policy(), reread.server.policy)

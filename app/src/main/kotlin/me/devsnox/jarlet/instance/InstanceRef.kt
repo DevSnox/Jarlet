@@ -36,7 +36,7 @@ data class InstanceRef private constructor(
         private fun validatePart(value: String, kind: String) {
             if (!NAME.matches(value)) {
                 throw JarletServiceException.InvalidInput(
-                    "$kind must contain only letters, digits, _ and -",
+                    "$kind must be a simple name containing only letters, digits, _ and -",
                 )
             }
         }

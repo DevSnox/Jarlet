@@ -18,7 +18,9 @@ object EnvironmentService {
     fun list(environment: String? = null): List<InstanceSummary> {
         val resolver = InstanceResolver()
         if (!Files.isDirectory(resolver.root())) return emptyList()
-        return Files.walk(resolver.root(), 2).use { paths ->
+        // Depth 2 covers root/instance; depth 3 also reaches the config in
+        // root/environment/instance without scanning arbitrary descendants.
+        return Files.walk(resolver.root(), 3).use { paths ->
             paths.filter { Files.isRegularFile(it) && it.fileName.toString() == "jarlet.toml" }
                 .map { path ->
                     val relative = resolver.root().relativize(path.parent)

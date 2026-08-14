@@ -74,7 +74,8 @@ internal object WorldTransferHandler {
     }
 
     private fun fingerprint(root: Path): Map<String, Pair<Long, Long>> = Files.walk(root).use { paths ->
-        paths.filter { Files.isRegularFile(it) }
+        paths.iterator().asSequence()
+            .filter { Files.isRegularFile(it) }
             .associate { path ->
                 val attributes = Files.readAttributes(path, java.nio.file.attribute.BasicFileAttributes::class.java)
                 root.relativize(path).toString() to (attributes.size() to attributes.lastModifiedTime().toMillis())

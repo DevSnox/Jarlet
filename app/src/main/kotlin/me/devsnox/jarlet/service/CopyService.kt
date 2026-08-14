@@ -83,7 +83,7 @@ object CopyService {
 
         val selectedServer = changes.flatMap { it.resources }.filterIsInstance<ServerPackageResource>().distinctBy { it.id }
         val selectedPlugins = changes.flatMap { it.resources }.filterIsInstance<PluginPackageResource>().distinctBy { it.id }
-        val mergedServer = selectedServer.firstOrNull()?.targetDeclaration(request.packageMode)
+        val mergedServer = selectedServer.firstOrNull()?.targetDeclaration(request.packageMode, targetToml.server)
             ?: targetToml.server
         val mergedPlugins = targetToml.plugins
             // Plugin IDs are globally unique in Jarlet, even when the source
@@ -177,7 +177,7 @@ object CopyService {
 
     private fun validateSourceResource(resource: ResolvedResource) {
         when (resource) {
-            is ServerPackageResource -> if (resource.declaration.pkg.isBlank() || resource.declaration.minecraftVersion.isBlank()) {
+            is ServerPackageResource -> if (resource.declaration.packageInfo.name.isBlank() || resource.declaration.packageInfo.version.isBlank()) {
                 throw JarletServiceException.InvalidInput("Source server package is incomplete")
             }
             is PluginPackageResource -> if (resource.declaration.id.isBlank() || resource.declaration.source.isBlank()) {
@@ -195,8 +195,8 @@ object CopyService {
         }
         val expectedServer = plan.targetToml.server
         if (resources.any { it is ServerPackageResource } &&
-            (targetToml.server.pkg != expectedServer.pkg ||
-                targetToml.server.minecraftVersion != expectedServer.minecraftVersion ||
+            (targetToml.server.packageInfo.name != expectedServer.packageInfo.name ||
+                targetToml.server.packageInfo.version != expectedServer.packageInfo.version ||
                 targetToml.server.policy != expectedServer.policy)
         ) {
             throw JarletServiceException.OperationFailed("Target server package did not transfer correctly")
@@ -231,12 +231,21 @@ object CopyService {
     }
 }
 
-private fun ServerPackageResource.targetDeclaration(mode: PackageTransferMode): JarletToml.Server = when (mode) {
-    PackageTransferMode.POLICY -> declaration
+private fun ServerPackageResource.targetDeclaration(
+    mode: PackageTransferMode,
+    target: JarletToml.Server,
+): JarletToml.Server = when (mode) {
+    PackageTransferMode.POLICY -> target.copy(
+        packageInfo = declaration.packageInfo,
+        policy = declaration.policy,
+    )
     PackageTransferMode.RESOLVED_PIN -> {
         val version = installed?.minecraftVersion
             ?: throw JarletServiceException.Conflict("Server package has no resolved installed version")
-        declaration.copy(minecraftVersion = version, policy = JarletToml.Policy(pin = version))
+        target.copy(
+            packageInfo = declaration.packageInfo.copy(version = version),
+            policy = JarletToml.Policy(pin = version),
+        )
     }
 }
 
