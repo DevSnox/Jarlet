@@ -22,7 +22,7 @@ class TrackCommand : JarletCommand(name = "track") {
 
     override fun help(context: Context) = "Change a server's update-tracking policy."
 
-    private val name by argument(name = "name", help = "Server name (a directory under the servers root).")
+    private val name by argument(name = "name", help = "Instance name or environment/instance.")
 
     private val pin by option("--pin", help = "Pin to an exact version.")
     private val channel by option("--channel", help = "Track this release channel.")

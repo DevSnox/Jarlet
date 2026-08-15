@@ -12,9 +12,10 @@ class EnvironmentListCommand : JarletCommand(name = "list") {
     override fun run() {
         val root = InstanceResolver.defaultRoot()
         val current = EnvironmentStore.current(root)
-        EnvironmentStore.read(root).forEach { environment ->
-            val marker = if (environment.name == current) " *" else ""
-            Log.info("${environment.name}$marker")
+        val environments = listOf(InstanceResolver.DEFAULT_NAMESPACE) + EnvironmentStore.read(root).map { it.name }
+        environments.forEach { environment ->
+            val marker = if (environment == current) " *" else ""
+            Log.info("$environment$marker")
         }
     }
 }

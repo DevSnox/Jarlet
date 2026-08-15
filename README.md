@@ -33,7 +33,7 @@ jarlet start myserver --accept-eula
 
 | Kind | Supported                                    |
 | --- |----------------------------------------------|
-| Server software | Paper                                        |
+| Server software | Paper, Velocity                              |
 | Plugins | Hangar, Spiget (SpigotMC), GitHub (Releases) |
 
 Want another source? Open an issue.
@@ -73,7 +73,7 @@ Run any command with `--help` for its full option list.
 
 ## Configuration
 
-Each server instance has its own `jarlet.toml`, generated from a template on `setup`. Names may be plain (`survival`) or namespaced (`prod/survival`); namespaced instances are stored under `JARLET_SERVERS_DIR/<environment>/<name>`. An optional `environments.toml` at the root can describe environment names without owning instance configuration. The bundled default template looks like this:
+Each instance has its own `jarlet.toml`, generated from a template on `setup`. Instances are stored under `~/.jarlet/instances/<environment>/<name>`; the implicit environment is `default`, and `jarlet env use <name>` selects the environment for plain instance names. Explicit names such as `prod/survival` always select that environment. `environments.toml` and `topology.toml` live at the Jarlet home root, beside `instances/`. The bundled default template looks like this:
 
 ```toml
 [template]
@@ -114,9 +114,11 @@ name = "velocity"
 version = "4.1.0-SNAPSHOT"
 ```
 
-Manage environment namespaces with `jarlet env`. The active environment is
-stored in the root-level `environments.toml`; removing an environment never
-deletes instance files and is refused while configured instances remain:
+Manage environment namespaces with `jarlet env`. `default` is always
+available as the virtual environment; use `jarlet env use default` to return
+to it. The active non-default environment is stored in the root-level
+`environments.toml`; removing an environment never deletes instance files and
+is refused while configured instances remain:
 
 ```bash
 jarlet env create prod
@@ -192,7 +194,7 @@ Jarlet installs and starts a server with no configuration required. Set these (i
 - `JARLET_GITHUB_TOKEN` — raises GitHub's API rate limit for GitHub-sourced plugins.
 - `JARLET_HANGAR_API_KEY` — required to fetch Hangar-sourced plugins (Hangar requires auth even for reads).
 - `JARLET_HOME` — overrides where Jarlet keeps its own state (default: `~/.jarlet`).
-- `JARLET_SERVERS_DIR` — overrides where server instances are created (must be an absolute path).
+- `JARLET_INSTANCES_DIR` — overrides the `instances/` directory (must be an absolute path).
 - `JARLET_CHANNEL` (installer only) — pick a release channel: `alpha`, `beta`, `rc`, or `release` (default).
 - `JARLET_TAG` (installer only) — pin installation to an exact release tag instead of a channel.
 

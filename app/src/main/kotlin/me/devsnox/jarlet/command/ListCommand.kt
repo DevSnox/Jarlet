@@ -25,7 +25,7 @@ class ListCommand : JarletCommand(name = "list") {
 
     override fun help(context: Context) = "List plugins declared for a server, merged with their installed state."
 
-    private val name by argument(name = "name", help = "Server name (a directory under the servers root).")
+    private val name by argument(name = "name", help = "Instance name or environment/instance.")
 
     private val page by option("--page", help = "1-indexed page number (see PLUGIN_LIST_PAGE_SIZE in jarlet-sys.conf). Defaults to 1.")
         .int()

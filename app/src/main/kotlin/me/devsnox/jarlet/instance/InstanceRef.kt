@@ -1,6 +1,7 @@
 package me.devsnox.jarlet.instance
 
 import me.devsnox.jarlet.config.SysConfig
+import me.devsnox.jarlet.config.EnvironmentStore
 import me.devsnox.jarlet.service.JarletServiceException
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -47,27 +48,43 @@ data class InstanceRef private constructor(
 class InstanceResolver(
     private val root: Path = defaultRoot(),
 ) {
-    fun root(): Path = root
-
-    fun directory(ref: InstanceRef): Path = ref.environment
-        ?.let { root.resolve(it).resolve(ref.name) }
-        ?: root.resolve(ref.name)
-
-    fun config(ref: InstanceRef): Path = directory(ref).resolve(SysConfig.default().value("TEMPLATE_FILENAME"))
-
-    fun resolve(value: String): InstanceRef = InstanceRef.parse(value)
-
     companion object {
+        const val DEFAULT_NAMESPACE = "default"
+        const val CONTROL_ROOT_PROPERTY = "jarlet.controlRoot"
+
+        private const val INSTANCE_ROOT_PROPERTY = "jarlet.instancesDir"
+
         fun defaultRoot(): Path {
-            val override = System.getProperty("jarlet.serversDir") ?: System.getenv("JARLET_SERVERS_DIR")
+            val override = System.getProperty(INSTANCE_ROOT_PROPERTY)
+                ?: System.getProperty("jarlet.serversDir")
+                ?: System.getenv("JARLET_INSTANCES_DIR")
             if (!override.isNullOrEmpty()) {
                 val path = Paths.get(override)
                 if (!path.isAbsolute) {
-                    throw JarletServiceException.InvalidInput("JARLET_SERVERS_DIR must be an absolute path")
+                    throw JarletServiceException.InvalidInput("JARLET_INSTANCES_DIR must be an absolute path")
                 }
                 return path
             }
-            return Paths.get(SysConfig.default().value("SERVERS_DIR_DEFAULT").replace("\$HOME", System.getProperty("user.home")))
+            return Paths.get(SysConfig.default().value("INSTANCES_DIR_DEFAULT").replace("\$HOME", System.getProperty("user.home")))
         }
+
+        fun controlRoot(instancesRoot: Path): Path =
+            System.getProperty(CONTROL_ROOT_PROPERTY)?.let(Paths::get) ?: instancesRoot.parent
+    }
+
+    fun root(): Path = root
+
+    fun directory(ref: InstanceRef): Path {
+        val namespace = ref.environment
+            ?: EnvironmentStore.current(root)
+        return root.resolve(namespace).resolve(ref.name)
+    }
+
+    fun config(ref: InstanceRef): Path = directory(ref).resolve(SysConfig.default().value("TEMPLATE_FILENAME"))
+
+    fun resolve(value: String): InstanceRef {
+        val parsed = InstanceRef.parse(value)
+        if (parsed.environment != null) return parsed
+        return InstanceRef.of(parsed.name, EnvironmentStore.current(root))
     }
 }

@@ -11,6 +11,6 @@ class EnvironmentCurrentCommand : JarletCommand(name = "current") {
 
     override fun run() {
         val current = EnvironmentStore.current(InstanceResolver.defaultRoot())
-        Log.info(current ?: "No environment selected")
+        Log.info(current)
     }
 }

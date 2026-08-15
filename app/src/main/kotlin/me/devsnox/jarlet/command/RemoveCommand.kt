@@ -17,7 +17,7 @@ class RemoveCommand : JarletCommand(name = "remove") {
 
     override fun help(context: Context) = "Undeclare a plugin and delete its installed jar."
 
-    private val name by argument(name = "name", help = "Server name (a directory under the servers root).")
+    private val name by argument(name = "name", help = "Instance name or environment/instance.")
     private val identifier by argument(name = "identifier", help = "The plugin's declared id.")
 
     override fun run() = serverCommandBody {

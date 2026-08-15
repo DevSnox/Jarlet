@@ -18,14 +18,17 @@ object EnvironmentService {
     fun list(environment: String? = null): List<InstanceSummary> {
         val resolver = InstanceResolver()
         if (!Files.isDirectory(resolver.root())) return emptyList()
-        // Depth 2 covers root/instance; depth 3 also reaches the config in
-        // root/environment/instance without scanning arbitrary descendants.
+        // Depth 3 reaches instances/namespace/instance/jarlet.toml without
+        // scanning arbitrary descendants.
         return Files.walk(resolver.root(), 3).use { paths ->
             paths.filter { Files.isRegularFile(it) && it.fileName.toString() == "jarlet.toml" }
                 .map { path ->
                     val relative = resolver.root().relativize(path.parent)
                     val parts = relative.iterator().asSequence().map { it.toString() }.toList()
-                    val ref = if (parts.size == 1) InstanceRef.of(parts[0]) else InstanceRef.of(parts[1], parts[0])
+                    if (parts.size != 2) {
+                        throw IllegalStateException("Invalid instance layout under ${resolver.root()}: $path")
+                    }
+                    val ref = InstanceRef.of(parts[1], parts[0])
                     InstanceSummary(ref, path.parent, configured = true)
                 }
                 .toList()

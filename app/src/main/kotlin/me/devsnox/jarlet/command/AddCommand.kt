@@ -27,7 +27,7 @@ class AddCommand : JarletCommand(name = "add") {
 
     override fun help(context: Context) = "Declare and fetch a new plugin for a server."
 
-    private val name by argument(name = "name", help = "Server name (a directory under the servers root).")
+    private val name by argument(name = "name", help = "Instance name or environment/instance.")
     private val identifier by argument(
         name = "identifier",
         help = "Hangar/Spiget slug or numeric id, an 'owner/repo' GitHub identifier, or (with --source) a raw source id.",

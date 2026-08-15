@@ -9,8 +9,9 @@ import me.devsnox.jarlet.topology.TopologyScope
 class TopologyStoreTest {
     @Test
     fun `reads namespaced topology and backend addresses`() {
-        val root = Files.createTempDirectory("jarlet-topology-")
+        val root = Files.createTempDirectory("jarlet-topology-").resolve("instances")
         try {
+            Files.createDirectories(root)
             Files.writeString(
                 TopologyStore.path(root),
                 """

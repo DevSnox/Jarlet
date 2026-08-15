@@ -13,9 +13,9 @@ import kotlin.test.assertEquals
 class JarletHomeTest {
 
     @Test
-    fun `resolves to $home slash jarlet when JARLET_HOME is not set`() {
+    fun `resolves to dot jarlet when JARLET_HOME is not set`() {
         if (System.getenv("JARLET_HOME").isNullOrEmpty()) {
-            assertEquals(Paths.get(System.getProperty("user.home"), "jarlet"), JarletHome.resolve())
+            assertEquals(Paths.get(System.getProperty("user.home"), ".jarlet"), JarletHome.resolve())
         }
         // else: JARLET_HOME is set in this environment and can't be
         // unset in-process, so the fallback path can't be exercised here.

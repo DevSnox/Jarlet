@@ -185,7 +185,7 @@ class StartCommandTest : CommandTestSupport() {
         // instead previously made this test spawn a real `java` process
         // (and pass with statusCode 0) on a machine with real connectivity.
         writeServerToml("myserver", defaultToml(minecraftVersion = "0.0.0-nonexistent"))
-        val serverDir = serversDir.resolve("myserver")
+        val serverDir = serversDir.resolve("default/myserver")
         Files.writeString(serverDir.resolve("eula.txt"), "eula=true\n")
 
         val result = Jarlet().test(listOf("start", "myserver"))

@@ -1,6 +1,7 @@
 package me.devsnox.jarlet.config
 
 import me.devsnox.jarlet.instance.InstanceRef
+import me.devsnox.jarlet.instance.InstanceResolver
 import me.devsnox.jarlet.service.JarletServiceException
 import me.devsnox.jarlet.topology.BackendRef
 import me.devsnox.jarlet.topology.Topology
@@ -11,7 +12,8 @@ import java.nio.file.Path
 
 /** Reads optional desired topology state; runtime registration remains provider-owned. */
 object TopologyStore {
-    fun path(root: Path): Path = root.resolve(SysConfig.default().value("TOPOLOGY_FILENAME"))
+    /** Topology metadata lives beside the physical `instances/` directory. */
+    fun path(root: Path): Path = InstanceResolver.controlRoot(root).resolve(SysConfig.default().value("TOPOLOGY_FILENAME"))
 
     fun read(root: Path): Topology? {
         val file = path(root)

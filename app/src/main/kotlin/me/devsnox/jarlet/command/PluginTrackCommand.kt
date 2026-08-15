@@ -20,7 +20,7 @@ class PluginTrackCommand : JarletCommand(name = "track") {
 
     override fun help(context: Context) = "Change a declared plugin's update-tracking policy."
 
-    private val name by argument(name = "name", help = "Server name (a directory under the servers root).")
+    private val name by argument(name = "name", help = "Instance name or environment/instance.")
     private val identifier by argument(name = "identifier", help = "The plugin's declared id.")
 
     private val pin by option("--pin", help = "Pin to an exact version.")

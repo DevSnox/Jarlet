@@ -13,6 +13,7 @@ import me.devsnox.jarlet.Log
 import me.devsnox.jarlet.config.JarletToml
 import me.devsnox.jarlet.config.write
 import me.devsnox.jarlet.server.ServerPaths
+import me.devsnox.jarlet.instance.InstanceResolver
 
 /**
  * Shared harness for command-level tests: exercises real `jarlet` CLI
@@ -87,11 +88,13 @@ abstract class CommandTestSupport {
     fun setUpServersDir() {
         serversDir = Files.createTempDirectory("jarlet-command-test-")
         System.setProperty(ServerPaths.SERVERS_DIR_PROPERTY, serversDir.toString())
+        System.setProperty(InstanceResolver.CONTROL_ROOT_PROPERTY, serversDir.toString())
     }
 
     @AfterTest
     fun tearDownServersDir() {
         System.clearProperty(ServerPaths.SERVERS_DIR_PROPERTY)
+        System.clearProperty(InstanceResolver.CONTROL_ROOT_PROPERTY)
         serversDir.toFile().deleteRecursively()
     }
 
@@ -112,8 +115,10 @@ abstract class CommandTestSupport {
         plugins = plugins,
     )
 
-    /** Creates the instance directory for [name] under the isolated [serversDir], without writing a jarlet.toml. */
-    protected fun createServerDir(name: String): Path = Files.createDirectories(serversDir.resolve(name))
+    /** Creates the default-namespace instance directory for [name]. */
+    protected fun createServerDir(name: String): Path = Files.createDirectories(
+        serversDir.resolve(InstanceResolver.DEFAULT_NAMESPACE).resolve(name),
+    )
 
     /** Creates the instance directory for [name] and writes [toml] as its `jarlet.toml`, returning the toml file's path. */
     protected fun writeServerToml(name: String, toml: JarletToml = defaultToml()): Path {

@@ -123,8 +123,8 @@ object CopyService {
         packageMode: PackageTransferMode = PackageTransferMode.POLICY,
     ): CopyResult = copy(
         CopyRequest(
-            source = InstanceRef.parse(source),
-            target = InstanceRef.parse(target),
+            source = resolver.resolve(source),
+            target = resolver.resolve(target),
             selectors = selectors.map(ResourceSelector::parse).toSet(),
             packageMode = packageMode,
         ),

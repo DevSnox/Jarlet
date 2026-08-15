@@ -37,7 +37,7 @@ class SetupCommandTest : CommandTestSupport() {
 
         assertEquals(1, result.statusCode)
         assertTrue(result.stderr.contains("simple name"), "expected the name-validation message, got: ${result.stderr}")
-        assertFalse(Files.exists(serversDir.resolve("bad name!")))
+        assertFalse(Files.exists(serversDir.resolve("default/bad name!")))
     }
 
     @Test
@@ -49,7 +49,7 @@ class SetupCommandTest : CommandTestSupport() {
 
         assertEquals(1, result.statusCode)
         assertTrue(result.stderr.contains("Invalid [server.package].version"), "got: ${result.stderr}")
-        assertFalse(Files.exists(serversDir.resolve("myserver")))
+        assertFalse(Files.exists(serversDir.resolve("default/myserver")))
     }
 
     @Test
@@ -61,7 +61,7 @@ class SetupCommandTest : CommandTestSupport() {
 
         assertEquals(1, result.statusCode)
         assertTrue(result.stderr.contains("Invalid [server.runtime].port"), "got: ${result.stderr}")
-        assertFalse(Files.exists(serversDir.resolve("myserver")))
+        assertFalse(Files.exists(serversDir.resolve("default/myserver")))
     }
 
     @Test
@@ -76,7 +76,7 @@ class SetupCommandTest : CommandTestSupport() {
             result.stderr.contains("Unknown [server.package].name 'not-a-real-package'"),
             "got: ${result.stderr}",
         )
-        assertFalse(Files.exists(serversDir.resolve("myserver")))
+        assertFalse(Files.exists(serversDir.resolve("default/myserver")))
     }
 
     @Test
@@ -99,6 +99,6 @@ class SetupCommandTest : CommandTestSupport() {
 
         assertEquals(1, result.statusCode)
         assertTrue(result.stderr.contains("does not exist"), "got: ${result.stderr}")
-        assertFalse(Files.exists(serversDir.resolve("myserver")))
+        assertFalse(Files.exists(serversDir.resolve("default/myserver")))
     }
 }
