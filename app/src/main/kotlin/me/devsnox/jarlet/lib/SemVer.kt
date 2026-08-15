@@ -5,7 +5,7 @@ package me.devsnox.jarlet.lib
  * policy -- shared across the plugin source adapters
  * ([me.devsnox.jarlet.adapter.plugin.GithubAdapter],
  * [me.devsnox.jarlet.adapter.plugin.SpigetAdapter], [me.devsnox.jarlet.adapter.plugin.HangarAdapter])
- * and [me.devsnox.jarlet.adapter.server.PaperAdapter], same as [SharedHttp]
+ * and [me.devsnox.jarlet.adapter.server.PaperMcAdapter], same as [SharedHttp]
  * is shared HTTP plumbing for those same adapters.
  *
  * Only `X.Y.Z` is modeled -- no pre-release/build-metadata comparison --

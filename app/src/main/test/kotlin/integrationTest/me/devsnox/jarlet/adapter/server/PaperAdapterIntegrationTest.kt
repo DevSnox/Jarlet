@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 import org.junit.jupiter.api.Timeout
 
 /**
- * Real, network-hitting smoke test for [PaperAdapter] -- confirms the adapter
+ * Real, network-hitting smoke test for [PaperMcAdapter] -- confirms the adapter
  * can talk to the actual fill.papermc.io v3 API end to end: resolve a stable
  * build for a real Minecraft version, download its server jar, and pass the
  * SHA-256 verification inside `install()`, all without throwing.
@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Timeout
  * network (see app/build.gradle.kts). Run explicitly via
  * `./gradlew integrationTest`.
  */
-class PaperAdapterIntegrationTest {
+class PaperMcAdapterIntegrationTest {
 
     /** Confirmed live against the Paper API on 2026-08-09: 1.21.11 has multiple STABLE builds (latest build 132). */
     private val minecraftVersion = "1.21.11"
@@ -30,7 +30,7 @@ class PaperAdapterIntegrationTest {
         try {
             val target = tempDir.resolve("server.jar")
 
-            PaperAdapter.install(minecraftVersion, target)
+            PaperMcAdapter.install("paper", minecraftVersion, target)
 
             assertTrue(target.exists(), "Expected the downloaded server jar to exist at $target")
             val actualSize = Files.size(target)

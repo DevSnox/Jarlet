@@ -7,22 +7,22 @@ import kotlin.test.assertTrue
 import me.devsnox.jarlet.Jarlet
 
 /**
- * `jarlet install <minecraft-version> [target] [package]` coverage
+ * `jarlet install <package-version> [target] [package]` coverage
  * restricted to the one path that never touches the network:
  * [me.devsnox.jarlet.adapter.server.ServerSoftwareAdapters.find] rejects an
  * unknown `package` before [me.devsnox.jarlet.adapter.server.ServerSoftwareAdapter.install]
  * ever runs. The success path (paper) requires a real download from
- * `PAPER_API` and is out of scope here -- see the existing
- * `PaperAdapterIntegrationTest` under `integrationTest` for that coverage.
+ * `PAPERMC_API` and is out of scope here -- see the existing
+ * `PaperMcAdapterIntegrationTest` under `integrationTest` for that coverage.
  */
 class InstallCommandTest : CommandTestSupport() {
 
     @Test
-    fun `missing minecraft-version argument is rejected`() {
+    fun `missing package-version argument is rejected`() {
         val result = Jarlet().test("install")
 
         assertEquals(1, result.statusCode)
-        assertTrue(result.stderr.contains("minecraft-version", ignoreCase = true), "got: ${result.stderr}")
+        assertTrue(result.stderr.contains("package-version", ignoreCase = true), "got: ${result.stderr}")
     }
 
     @Test

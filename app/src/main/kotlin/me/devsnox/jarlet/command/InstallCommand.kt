@@ -9,7 +9,7 @@ import me.devsnox.jarlet.command.lib.serverCommandBody
 import java.nio.file.Paths
 
 /**
- * `jarlet install <minecraft-version> [target] [package]`
+ * `jarlet install <package-version> [target] [package]`
  *
  * Kept as its own subcommand for direct use, though [SetupCommand] and
  * [StartCommand] call the resolved
@@ -19,12 +19,12 @@ import java.nio.file.Paths
 class InstallCommand : JarletCommand(name = "install") {
     override fun help(context: Context) = "Download and verify a server-software package."
 
-    private val minecraftVersion: String by argument(name = "minecraft-version")
+    private val packageVersion: String by argument(name = "package-version")
     private val target: String by argument(name = "target").default("server.jar")
     private val serverPackage: String by argument(name = "package").default("paper")
 
     override fun run() = serverCommandBody {
         val adapter = ServerSoftwareAdapters.find(serverPackage)
-        adapter.install(minecraftVersion, Paths.get(target))
+        adapter.install(serverPackage, packageVersion, Paths.get(target))
     }
 }

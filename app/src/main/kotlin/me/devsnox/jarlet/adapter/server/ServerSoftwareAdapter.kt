@@ -10,12 +10,18 @@ import java.nio.file.Path
  * reflection-based, which matters for a GraalVM native-image build.
  */
 interface ServerSoftwareAdapter {
-    /** The `[server.package].name` value this adapter handles, e.g. `"paper"`. */
-    val id: String
+    /** The `[server.package].name` values this adapter handles. */
+    val supportedPackages: Set<String>
+
+    /** Whether [packageName] is a Minecraft server and needs EULA/runtime files. */
+    fun isMinecraftServer(packageName: String): Boolean = true
+
+    /** Arguments appended after `-jar server.jar` when [packageName] starts. */
+    fun launchArguments(packageName: String): List<String> = listOf("nogui")
 
     /**
-     * Downloads and verifies a server jar for [minecraftVersion], writing
-     * the result to [target]. Returns the Minecraft version actually
+     * Downloads and verifies a server jar for [packageVersion], writing
+     * the result to [target]. Returns the package version actually
      * installed.
      *
      * Implementations are expected to throw on any failure (unsupported
@@ -25,16 +31,21 @@ interface ServerSoftwareAdapter {
      * user-facing error.
      *
      * [policy] is the `[server.policy]` version-selection policy. Under
-     * `track = "minor"`/`"patch"`, [minecraftVersion] is a movable baseline
+     * `track = "minor"`/`"patch"`, [packageVersion] is a movable baseline
      * rather than a fixed target -- an implementation MAY resolve and
-     * install a higher version within that bound (see [PaperAdapter]) and
+     * install a higher version within that bound (where supported) and
      * report the resolved version back through the return value, which is
-     * exactly `minecraftVersion` unchanged for every other policy shape
+     * exactly [packageVersion] unchanged for every other policy shape
      * (pin, track=latest/channel, no policy). Callers use the returned
-     * version -- not the [minecraftVersion] argument -- when recording what
+     * version -- not the requested package version -- when recording what
      * was actually installed (see `ServerStateStore`), so drift-detection
      * on the next reconciliation compares against reality rather than a
      * baseline that may have already been advanced past.
      */
-    fun install(minecraftVersion: String, target: Path, policy: JarletToml.Policy = JarletToml.Policy()): String
+    fun install(
+        packageName: String,
+        packageVersion: String,
+        target: Path,
+        policy: JarletToml.Policy = JarletToml.Policy(),
+    ): String
 }

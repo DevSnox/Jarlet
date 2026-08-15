@@ -17,8 +17,8 @@ import me.devsnox.jarlet.config.write
  *
  * NOT covered here (needs a real network call, already out of scope for
  * this network-free suite): the success path, which requires
- * [me.devsnox.jarlet.adapter.server.PaperAdapter] to actually download a
- * server jar from `PAPER_API`. That would belong in `integrationTest`
+ * [me.devsnox.jarlet.adapter.server.PaperMcAdapter] to actually download a
+ * server jar from `PAPERMC_API`. That would belong in `integrationTest`
  * alongside the other adapter smoke tests, not here.
  */
 class SetupCommandTest : CommandTestSupport() {

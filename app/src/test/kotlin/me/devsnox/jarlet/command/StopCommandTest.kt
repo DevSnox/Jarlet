@@ -59,7 +59,7 @@ class StopCommandTest : CommandTestSupport() {
     }
 
     @Test
-    fun `a live PID whose command line is not the Paper server is rejected`() {
+    fun `a live PID whose command line is not the configured server is rejected`() {
         val serverDir = createServerDir("myserver")
         val jarletDir = Files.createDirectories(serverDir.resolve(".jarlet"))
         val ownPid = ProcessHandle.current().pid()
@@ -69,7 +69,7 @@ class StopCommandTest : CommandTestSupport() {
 
         assertEquals(1, result.statusCode)
         assertTrue(
-            result.stderr.contains("does not appear to be the Paper server"),
+            result.stderr.contains("does not appear to be the configured server process"),
             "got: ${result.stderr}",
         )
     }

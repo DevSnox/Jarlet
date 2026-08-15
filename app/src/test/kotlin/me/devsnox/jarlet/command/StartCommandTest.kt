@@ -139,7 +139,7 @@ class StartCommandTest : CommandTestSupport() {
         // guard) but doesn't exist on Paper's real project -- this makes
         // the reinstall attempt fail deterministically regardless of
         // whether this environment actually has network access: offline,
-        // PaperAdapter.fetchProject() throws on the network call itself;
+        // PaperMcAdapter.fetchProject() throws on the network call itself;
         // online (as on a real dev machine), fetchProject() succeeds but
         // the version-support check then fails, since no real Minecraft
         // version will ever match "0.0.0-nonexistent". Either way,

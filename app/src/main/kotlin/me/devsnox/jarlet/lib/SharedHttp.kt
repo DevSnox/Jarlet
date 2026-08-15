@@ -26,7 +26,7 @@ import kotlin.collections.iterator
  * source adapters ([me.devsnox.jarlet.adapter.plugin.HangarAdapter],
  * [me.devsnox.jarlet.adapter.plugin.GithubAdapter],
  * [me.devsnox.jarlet.adapter.plugin.SpigetAdapter]), the server-software
- * adapter ([me.devsnox.jarlet.adapter.server.PaperAdapter]), plus
+ * adapter ([me.devsnox.jarlet.adapter.server.PaperMcAdapter]), plus
  * [me.devsnox.jarlet.plugin.SourceResolver] and
  * [me.devsnox.jarlet.plugin.UntrustedExternalDownloader]. Deliberately
  * subsystem-neutral (package `me.devsnox.jarlet.lib`, not

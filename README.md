@@ -46,7 +46,8 @@ jarlet setup <name|environment/name> [template-file]
 jarlet start <name> [--accept-eula] [--foreground]
                                             Start a server, setting it up first if needed
 jarlet stop <name>                         Stop a running server instance
-jarlet install <package> <version> <path>  Download and verify a server-software package directly
+jarlet install <package-version> [target] [package]
+                                            Download and verify a server-software package directly
 
 jarlet plugin add <name> <identifier> [--pin <version> | --channel <name>] [--source <hangar|spiget|github>]
                                             Declare and fetch a new plugin
@@ -102,6 +103,16 @@ track = "channel"
 ```
 
 `policy` controls how updates are picked: `track = "channel"` follows a named release channel (`channel = "..."`), `track = "minor"`/`"patch"` stays within a semver bound, and `pin = "<exact version>"` locks to one version. `[server.policy]` and each plugin's `[plugins.policy]` work the same way.
+
+Paper and Velocity packages are downloaded through the shared PaperMC
+repository adapter. Paper versions refer to Minecraft versions, while
+Velocity versions refer to the Velocity release itself:
+
+```toml
+[server.package]
+name = "velocity"
+version = "4.1.0-SNAPSHOT"
+```
 
 Manage environment namespaces with `jarlet env`. The active environment is
 stored in the root-level `environments.toml`; removing an environment never

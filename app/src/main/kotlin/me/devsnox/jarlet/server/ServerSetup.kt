@@ -60,7 +60,7 @@ internal object ServerSetup {
 
             val serverJar = serverDir.resolve("server.jar")
             if (!Files.isRegularFile(serverJar)) {
-                val installedVersion = adapter.install(server.packageInfo.version, serverJar, server.policy)
+                val installedVersion = adapter.install(server.packageInfo.name, server.packageInfo.version, serverJar, server.policy)
                 // Recording this here means StartCommand's own drift-check
                 // (ServerStateStore.read(serverDir) == null) sees a real
                 // record right after `jarlet setup`, instead of
@@ -69,20 +69,22 @@ internal object ServerSetup {
                 ServerStateStore.write(serverDir, InstalledServer(pkg = server.packageInfo.name, minecraftVersion = installedVersion))
             }
 
-            val eulaFile = serverDir.resolve("eula.txt")
-            if (!Files.isRegularFile(eulaFile)) {
-                Files.writeString(eulaFile, "eula=true\n")
-            }
+            if (adapter.isMinecraftServer(server.packageInfo.name)) {
+                val eulaFile = serverDir.resolve("eula.txt")
+                if (!Files.isRegularFile(eulaFile)) {
+                    Files.writeString(eulaFile, "eula=true\n")
+                }
 
-            val propertiesFile = serverDir.resolve("server.properties")
-            if (!Files.isRegularFile(propertiesFile)) {
-                Files.writeString(
-                    propertiesFile,
-                    "server-port=${server.runtime.port}\n" +
-                        "online-mode=${server.runtime.onlineMode}\n" +
-                        "motd=A Jarlet Minecraft Server\n" +
-                        "enable-command-block=false\n",
-                )
+                val propertiesFile = serverDir.resolve("server.properties")
+                if (!Files.isRegularFile(propertiesFile)) {
+                    Files.writeString(
+                        propertiesFile,
+                        "server-port=${server.runtime.port}\n" +
+                            "online-mode=${server.runtime.onlineMode}\n" +
+                            "motd=A Jarlet Minecraft Server\n" +
+                            "enable-command-block=false\n",
+                    )
+                }
             }
 
             // The instance name lives only in the directory name / CLI arg,

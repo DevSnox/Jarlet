@@ -80,7 +80,7 @@ object ServerService {
             installed == null || installed.pkg != server.packageInfo.name || installed.minecraftVersion != server.packageInfo.version
         if (needsInstall) {
             Files.createDirectories(serverDir)
-            val installedVersion = adapter.install(server.packageInfo.version, serverJar, server.policy)
+            val installedVersion = adapter.install(server.packageInfo.name, server.packageInfo.version, serverJar, server.policy)
             ServerStateStore.write(serverDir, InstalledServer(pkg = server.packageInfo.name, minecraftVersion = installedVersion))
         }
         if (!Files.isRegularFile(serverJar)) {
@@ -121,17 +121,19 @@ object ServerService {
 
         val adapter = ServerSoftwareAdapters.find(server.packageInfo.name)
 
-        val eulaFile = serverDir.resolve("eula.txt")
-        val eulaAccepted = Files.isRegularFile(eulaFile) &&
-            Files.readAllLines(eulaFile).any { it == "eula=true" }
-        if (!eulaAccepted) {
-            if (!acceptEula) {
-                throw JarletServiceException.InvalidInput(
-                    "Run jarlet start $name --accept-eula after reading https://aka.ms/MinecraftEULA",
-                )
+        if (adapter.isMinecraftServer(server.packageInfo.name)) {
+            val eulaFile = serverDir.resolve("eula.txt")
+            val eulaAccepted = Files.isRegularFile(eulaFile) &&
+                Files.readAllLines(eulaFile).any { it == "eula=true" }
+            if (!eulaAccepted) {
+                if (!acceptEula) {
+                    throw JarletServiceException.InvalidInput(
+                        "Run jarlet start $name --accept-eula after reading https://aka.ms/MinecraftEULA",
+                    )
+                }
+                Files.createDirectories(serverDir)
+                Files.writeString(eulaFile, "eula=true\n")
             }
-            Files.createDirectories(serverDir)
-            Files.writeString(eulaFile, "eula=true\n")
         }
 
         val serverJar = serverDir.resolve("server.jar")
@@ -145,7 +147,7 @@ object ServerService {
             if (!jarMissing && serverDrifted) {
                 Log.info("jarlet.toml no longer matches the installed server.jar (was ${installedServer?.pkg} ${installedServer?.minecraftVersion}); reinstalling")
             }
-            val installedVersion = adapter.install(server.packageInfo.version, serverJar, server.policy)
+            val installedVersion = adapter.install(server.packageInfo.name, server.packageInfo.version, serverJar, server.policy)
             ServerStateStore.write(serverDir, InstalledServer(pkg = server.packageInfo.name, minecraftVersion = installedVersion))
         }
         if (!Files.isRegularFile(serverJar)) {
@@ -179,7 +181,7 @@ object ServerService {
             Files.deleteIfExists(pidFile)
         }
 
-        Log.info("Starting Paper ${server.packageInfo.version} with ${server.runtime.memory} memory")
+        Log.info("Starting ${server.packageInfo.name} ${server.packageInfo.version} with ${server.runtime.memory} memory")
 
         val command = listOf(
             "java",
@@ -188,8 +190,7 @@ object ServerService {
             "-Dfile.encoding=UTF-8",
             "-jar",
             "server.jar",
-            "nogui",
-        )
+        ) + adapter.launchArguments(server.packageInfo.name)
 
         return ServerStartPreparation(serverDir, currentToml, command)
     }
@@ -265,7 +266,7 @@ object ServerService {
             (listOf(info.command().orElse("")) + info.arguments().orElse(emptyArray())).joinToString(" ")
         }
         if (!commandLine.contains("java") || !commandLine.contains("-jar server.jar")) {
-            throw JarletServiceException.Conflict("PID $serverPid does not appear to be the Paper server")
+            throw JarletServiceException.Conflict("PID $serverPid does not appear to be the configured server process")
         }
 
         Log.info("Stopping server \"$name\"...")
